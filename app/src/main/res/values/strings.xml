@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">Hoi</string>
+    <string name="action_search">Search</string>
+    <string name="hello_world">Hello world!</string>
+    <string name="search_hint">Search Places</string>
+    <string name="search_settings">Search Places</string>
+    <string name="Book">Book Cab</string>
+    <string name="drawer_open">HOI</string>
+    <string name="drawer_close">Book Ride</string>
+    <string name="title_section1">Book Ride</string>
+    <string name="title_section2">Add Location</string>
+    <string name="title_section3">Wallet</string>
+    <string name="pickup">PickUp Location</string>
+    <string name="drop">Drop Location</string>
+    <string name="version_name">1.0</string>
+    <string name="title_section4">TnC</string>
+    <string name="title_section5">FAQs</string>
+    <string name="title_section6">Log Out</string>
+    <string name="navigation_drawer_open">Open navigation drawer</string>
+    <string name="navigation_drawer_close">Close navigation drawer</string>
+    <string name="action_example">Login</string>
+    <string name="action_book">Book</string>
+    <string name="action_settings">Settings</string>
+    <string name="title_activity_show_message">ShowMessage</string>
+    <string name="title_activity_login">Login</string>
+    <string name="title_activity_ride_confirmation">Ride Confirmation</string>
+    <string name="title_activity_rides_list">My Rides</string>
+    <string name="title_activity_ride_cancel">Cancel Ride</string>
+    <string name="title_activity_ride_modify">Modify Ride</string>
+    <string name="title_activity_my_account">My Profile</string>
+    <string name="title_activity_tn_c">Terms n Conditions</string>
+    <string name="title_activity_faqs">FAQs</string>
+    <string name="title_activity_contact">Contact Hoi</string>
+    <string name="title_activity_maps">Map</string>
+    <string name="ok">Confirm Ride</string>
+    <string name="cancel">Cancel Ride</string>
+    <string name="MY_PREFS_FILE_NAME">sharecabshoi</string>
+
+</resources>
