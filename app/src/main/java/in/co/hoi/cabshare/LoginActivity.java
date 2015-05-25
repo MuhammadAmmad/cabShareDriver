@@ -415,7 +415,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
         @Override
         protected void onPostExecute(HashMap<String, String> result) {
 
-           System.out.println(result.get("code"));
+           //System.out.println(result.get("code"));
            if(result == null){
 
            }
@@ -433,8 +433,8 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
                    intent.putExtra("availableinr", result.get("availableinr"));
                    intent.putExtra("hastorateprevious", Boolean.parseBoolean(result.get("hastorateprevious")));
                    intent.putExtra("inaride", Boolean.parseBoolean(result.get("inaride")));
-                   intent.putExtra("awaitingride", Boolean.parseBoolean(result.get("awaitingrider")));
-                   intent.putExtra("genriderequestid", result.get("genriderequestid"));
+                   intent.putExtra("awaitingride", Boolean.parseBoolean(result.get("awaitingride")));
+                   intent.putExtra("genriderequestid", Integer.parseInt(result.get("genriderequestid")));
                    intent.putExtra("authenticationHeader",authenticationHeader);
 
                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);

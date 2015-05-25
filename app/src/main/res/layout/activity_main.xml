@@ -26,16 +26,18 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
 
-    <Button
-        android:id = "@+id/book_ride_button"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:text="@string/Book"
-        android:onClick="confirmRide"
-        android:layout_alignBottom="@+id/map"
-        android:layout_alignParentRight="true"
-        android:layout_alignParentEnd="true" />
+        <Button android:id="@+id/book_ride_button" style="?android:textAppearanceSmall"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:layout_marginTop="1dp"
+            android:layout_marginBottom="@dimen/abc_text_size_caption_material"
+            android:layout_alignBottom="@+id/map"
+            android:layout_alignParentRight="true"
+            android:layout_alignParentEnd="true"
+            android:onClick="confirmRide"
+            android:text="@string/Book"
+            android:textStyle="bold"
+            android:background="#ff9acec9" />
 
     <Button
         android:layout_width="match_parent"
