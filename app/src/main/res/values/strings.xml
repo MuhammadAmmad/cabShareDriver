@@ -37,5 +37,7 @@
     <string name="ok">Confirm Ride</string>
     <string name="cancel">Cancel Ride</string>
     <string name="MY_PREFS_FILE_NAME">sharecabshoi</string>
+    <string name="Start">Start Ride</string>
+    <string name="cancel_ride">Cancel Ride</string>
 
 </resources>
