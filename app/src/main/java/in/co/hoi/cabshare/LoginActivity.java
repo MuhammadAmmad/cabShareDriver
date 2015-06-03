@@ -3,6 +3,7 @@ package in.co.hoi.cabshare;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.LoaderManager.LoaderCallbacks;
+import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.CursorLoader;
 import android.content.DialogInterface;
@@ -83,13 +84,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         prefs= ObscuredSharedPreferences.getPrefs(this, "Hoi Cabs", Context.MODE_PRIVATE);
-
-        String email = prefs.getString("username",null);
-        String password = prefs.getString("password",null);
-
-
 
         autoLogin();
         setContentView(R.layout.activity_login);
@@ -274,6 +269,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
         private final String mEmail;
         private final String mPassword;
         private HttpResponse response;
+        ProgressDialog asyncDialog = new ProgressDialog(LoginActivity.this);
 
         UserLoginTask(String email, String password) {
             mEmail = email;
@@ -368,14 +364,27 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
 
                 ParserTask userDataParserTask = new ParserTask(mEmail, mPassword);
                 userDataParserTask.execute(data);
+                asyncDialog.dismiss();
 
             } else {
                 if(!mPasswordView.getText().toString().isEmpty()) {
+                    asyncDialog.dismiss();
                     mPasswordView.setError(getString(R.string.error_incorrect_password));
                     mPasswordView.requestFocus();
                 }
 
             }
+            super.onPostExecute(data);
+
+        }
+
+        @Override
+        protected void onPreExecute() {
+            //set message of the dialog
+            asyncDialog.setMessage(getString(R.string.login_attempt));
+            //show dialog
+            asyncDialog.show();
+            super.onPreExecute();
         }
 
         @Override

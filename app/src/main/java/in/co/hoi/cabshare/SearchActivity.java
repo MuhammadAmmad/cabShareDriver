@@ -25,6 +25,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
@@ -33,6 +34,9 @@ public class SearchActivity extends Activity {
     LatLng locationCoordinate;
     LatLng currentCoordinate;
     CustomAutoCompleteTextView locationToSearch;
+    List<SavedPlaceItem> savedPlaces = new ArrayList<SavedPlaceItem>();
+    ListView list;
+    CustomListAdapter adapter;
 
     String l;
 
@@ -60,6 +64,11 @@ public class SearchActivity extends Activity {
                 ,Double.parseDouble(getIntent().getExtras().getString("CurrentLongitude")));
         System.out.println(l);
 
+        //To show the favorite places of user saved by him : current count 5
+        populateSavedPlaces();
+        list = (ListView)findViewById(R.id.saved_location);
+        adapter=new CustomListAdapter(this, savedPlaces, getResources());
+        list.setAdapter( adapter );
 
 
         // Adding textchange listener
@@ -115,6 +124,10 @@ public class SearchActivity extends Activity {
         });
     }
 
+    private void populateSavedPlaces(){
+        savedPlaces.add(new SavedPlaceItem(28.5549, 77.0842 ,"Indira Gandhi International Airport", "New Delhi"));
+    }
+
     public void sendMessage(View view)
     {
         //System.out.println("Check Child 1");
@@ -135,6 +148,17 @@ public class SearchActivity extends Activity {
 
             finish();
         }
+    }
+
+    /*****************  This function used by adapter ****************/
+    public void onItemClick(int mPosition)
+    {
+        SavedPlaceItem tempValues = (SavedPlaceItem) savedPlaces.get(mPosition);
+        locationToSearch.setText(tempValues.getAddress1()+", "+tempValues.getAddress2());
+        locationCoordinate = new LatLng(tempValues.getCoordinates().latitude, tempValues.getCoordinates().longitude);
+        // SHOW ALERT
+
+
     }
 
     private String getAutoCompleteUrl(String place){
@@ -366,4 +390,5 @@ public class SearchActivity extends Activity {
         getMenuInflater().inflate(R.menu.main, menu);
         return true;
     }
+
 }

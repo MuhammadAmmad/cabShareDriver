@@ -4,11 +4,13 @@ import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.Fragment;
 import android.app.FragmentManager;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.database.Cursor;
 import android.graphics.Color;
+import android.graphics.drawable.BitmapDrawable;
 import android.location.Address;
 import android.location.Criteria;
 import android.location.Geocoder;
@@ -25,13 +27,16 @@ import android.support.v4.view.GravityCompat;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.PopupWindow;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -58,7 +63,6 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.message.BasicNameValuePair;
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -71,7 +75,6 @@ import java.security.InvalidKeyException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Timer;
@@ -92,8 +95,6 @@ public class MainActivity extends ActionBarActivity implements android.location.
     private Marker sourceMarker;
     private Marker destinationMarker;
     private Marker cabMarker;
-    private LatLng sourceCoordinate;
-    private LatLng destinationCoordinate;
     private LatLng currentLocationCoordinate;
     private LatLng cabLatestCoordinate;
 
@@ -115,6 +116,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
     private boolean inRide;
     private boolean awaitingRide;
     private boolean ratingPending;
+    ObscuredSharedPreferences prefs;
     
     private CabBookingDetails cabBookingDetails;
     private  RideDetail rideDetails;
@@ -126,6 +128,19 @@ public class MainActivity extends ActionBarActivity implements android.location.
     Timer timer;
     TimerTask timerTask;
 
+    // fare related variables
+    private float cabFare = 0.0f;
+    private float billingRate = 10f;
+    private float distanceTravelled = 0.0f;
+    private float durationTravelled = 0;
+    private int stateCounter = 0;
+
+    //rating related variables
+    private int driverRating = 0;
+
+
+    JSONObject cabBookinginfo;
+    JSONObject cabawaitinginfo;
 
 
     final Handler handler = new Handler();
@@ -144,21 +159,36 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
+        prefs= ObscuredSharedPreferences.getPrefs(this, "Hoi Cabs", Context.MODE_PRIVATE);
 
         //Updating the user state in applciation
 
         inRide = getIntent().getBooleanExtra("inaride",false);
         awaitingRide = getIntent().getBooleanExtra("awaitingride",false);
         ratingPending = getIntent().getBooleanExtra("hastorateprevious",false);
+        try {
+        if(awaitingRide){
+            if(prefs.contains("CabBookingDetail")) {
+                cabBookinginfo = new JSONObject(prefs.getString("CabBookingDetail", null));
+                getCabBookingData();
+            }
+
+            if(prefs.contains("CabAwaitingDetail")) {
+                cabawaitinginfo = new JSONObject(prefs.getString("CabAwaitingDetail", null));
+                getCabAwaitingData();
+            }
+
+
+        }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
 
         if(getIntent().hasExtra("authenticationHeader"))
             authenticationHeader = getIntent().getStringExtra("authenticationHeader");
 
         rideRequestId = getIntent().getIntExtra("genriderequestid", 0);
-
-        System.out.println(rideRequestId);
-
-        System.out.println(inRide + " " + awaitingRide + " " + ratingPending );
 
         checkForGPS = false;
 
@@ -262,15 +292,20 @@ public class MainActivity extends ActionBarActivity implements android.location.
                 //Creating view depending on the status of the user
 
 
-                onCreateView();
+                try {
+                    onCreateView();
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
             }
         }
         getIntent().setAction("Already created");
         }
 
-    private void onCreateView (){
+    private void onCreateView () throws JSONException {
         System.out.println("Creating View depending on status");
         LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        Button bi = (Button)findViewById(R.id.shareCabRates);
         Button b1 = (Button) findViewById(R.id.search_source_button);
         Button b2 = (Button) findViewById(R.id.search_destination_button);
         Button b3 = (Button) findViewById(R.id.book_ride_button);
@@ -284,13 +319,16 @@ public class MainActivity extends ActionBarActivity implements android.location.
             b2.setVisibility(View.INVISIBLE);
             b3.setVisibility(View.VISIBLE);
             b4.setVisibility(View.VISIBLE);
+            bi.setVisibility(View.INVISIBLE);
 
             b1.setText("Track Your Ride");
             b3.setText("Cancel Cab");
             b4.setText("Start Ride");
+            setTitle("Awaiting Ride");
 
             if(sourceMarker!= null) sourceMarker.remove();
             if(destinationMarker!= null) destinationMarker.remove();
+
             startTimer();
 
         }
@@ -299,11 +337,14 @@ public class MainActivity extends ActionBarActivity implements android.location.
          */
         else if(inRide){
 
+            bi.setVisibility(View.INVISIBLE);
             b1.setVisibility(View.INVISIBLE);
             b2.setVisibility(View.INVISIBLE);
             b3.setVisibility(View.INVISIBLE);
             b4.setVisibility(View.VISIBLE);
+
             b4.setText("End Ride");
+            setTitle("In Ride");
 
             mGoogleMap.setMyLocationEnabled(true);
 
@@ -328,6 +369,8 @@ public class MainActivity extends ActionBarActivity implements android.location.
          */
         else if(ratingPending){
 
+            setTitle("Rating");
+            bi.setVisibility(View.INVISIBLE);
             b1.setVisibility(View.INVISIBLE);
             b2.setVisibility(View.INVISIBLE);
             b3.setVisibility(View.INVISIBLE);
@@ -339,16 +382,18 @@ public class MainActivity extends ActionBarActivity implements android.location.
             View for user when he is booking ride
          */
         else{
-
+            bi.setVisibility(View.VISIBLE);
             b1.setVisibility(View.VISIBLE);
             b2.setVisibility(View.VISIBLE);
             b3.setVisibility(View.VISIBLE);
             b4.setVisibility(View.INVISIBLE);
             b1.setText("Set PickUp Loaction");
             b2.setText("Set Drop Location");
-            b3.setText("Book Ride");
-            if(currentLocationCoordinate == null){
-                mGoogleMap.setMyLocationEnabled(true);
+            b3.setText("Book Cab");
+
+            setTitle("Book Cab");
+            mGoogleMap.setMyLocationEnabled(false);
+
 
                 // Creating a criteria object to retrieve provider
                 Criteria criteria = new Criteria();
@@ -362,13 +407,10 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
                 currentLocationCoordinate = new LatLng(location.getLatitude(), location.getLongitude());
 
-            }
 
             IconGenerator iconFactory = new IconGenerator(this);
-
-            sourceCoordinate = new LatLng(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude);
             iconFactory.setColor(Color.GREEN);
-            sourceMarker = addIcon(iconFactory, "PickUp", sourceCoordinate);
+            sourceMarker = addIcon(iconFactory, "PickUp", new LatLng(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude));
             sourceMarker.isDraggable();
 
             CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(currentLocationCoordinate, 16);
@@ -378,7 +420,6 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
     @Override
     public void onPause() {
-        System.out.println("Activity is paused");
         super.onPause();  // Always call the superclass method first
     }
 
@@ -403,6 +444,56 @@ public class MainActivity extends ActionBarActivity implements android.location.
                 getIntent().setAction(null);
         }
         super.onResume();
+    }
+
+    @Override
+    protected void onStop() {
+        if(awaitingRide){
+            prefs.edit().putString("CabBookingDetail",cabBookinginfo.toString()).commit();
+            prefs.edit().putString("CabAwaitingDetail",cabawaitinginfo.toString()).commit();
+        }
+        super.onStop();
+    }
+
+    public void showCabRates(View view){
+        System.out.println("popshow");
+
+        // Inflate the popup_layout.xml
+        LinearLayout viewGroup = (LinearLayout) this.findViewById(R.id.popup);
+        LayoutInflater layoutInflater = (LayoutInflater) this
+                .getSystemService(this.LAYOUT_INFLATER_SERVICE);
+        View layout = layoutInflater.inflate(R.layout.popup_layout, viewGroup);
+
+        layout.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+
+
+
+        // Creating the PopupWindow
+        final PopupWindow popup = new PopupWindow(this);
+        popup.setContentView(layout);
+        popup.setWidth(layout.getMeasuredWidth());
+        popup.setHeight(layout.getMeasuredHeight());
+        popup.setFocusable(true);
+
+        // Some offset to align the popup a bit to the right, and a bit down, relative to button's position.
+        int OFFSET_X = 30;
+        int OFFSET_Y = 30;
+
+        // Clear the default translucent background
+        popup.setBackgroundDrawable(new BitmapDrawable());
+
+        // Displaying the popup at the specified location, + offsets.
+        popup.showAtLocation(layout, Gravity.CENTER, 0, 0);
+
+        // Getting a reference to Close button, and close the popup when clicked.
+        Button close = (Button) layout.findViewById(R.id.close_popup);
+        close.setOnClickListener(new View.OnClickListener() {
+
+            @Override
+            public void onClick(View v) {
+                popup.dismiss();
+            }
+        });
     }
 
     public void sendMessageSource(View view)
@@ -465,18 +556,15 @@ public class MainActivity extends ActionBarActivity implements android.location.
             System.out.println("check4");
             // check if the request code is same as what is passed  here it is 2
             if (requestCode == 2) {
-
-                sourceCoordinate = new LatLng(latitude, longitude);
                 iconFactory.setColor(Color.GREEN);
-                sourceMarker = addIcon(iconFactory, "PickUp", sourceCoordinate);
+                sourceMarker = addIcon(iconFactory, "PickUp", new LatLng(latitude, longitude));
                 sourceMarker.isDraggable();
             } else if (requestCode == 3) {
-                destinationCoordinate = new LatLng(latitude, longitude);
                 iconFactory.setColor(Color.RED);
-                destinationMarker = addIcon(iconFactory, "Drop", destinationCoordinate);
+                destinationMarker = addIcon(iconFactory, "Drop",new LatLng(latitude, longitude));
                 destinationMarker.isDraggable();
-
             }
+
             CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(new LatLng(latitude, longitude), 16);
             mGoogleMap.animateCamera(yourLocation);
         }
@@ -489,6 +577,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
             SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
             String currentDateandTime = sdf.format(new Date());
             int minutes = 0, hours = 0;
+
             if(cabBookingDetails != null) {
                 minutes = Integer.parseInt(currentDateandTime.substring(14)) -
                         Integer.parseInt(cabBookingDetails.requestdatetime.substring(14));
@@ -496,20 +585,21 @@ public class MainActivity extends ActionBarActivity implements android.location.
                 hours = Integer.parseInt(currentDateandTime.substring(11, 12)) -
                         Integer.parseInt(cabBookingDetails.requestdatetime.substring(11, 12));
             }
-            DistanceDurationInfo getDistDurInfoTask = new DistanceDurationInfo(sourceCoordinate.latitude, sourceCoordinate.longitude,
-                    cabLatestCoordinate.latitude, cabLatestCoordinate.longitude);
-            getDistDurInfoTask.execute();
 
-            String str_result = getDistDurInfoTask.execute().get();
+            DistanceDurationInfo getDistDurInfoTask = new DistanceDurationInfo(new LatLng(cabBookingDetails.origin_latitude,
+                    cabBookingDetails.origin_longitude),cabLatestCoordinate);
+            float[] distdurInfo = getDistDurInfoTask.googleDistanceDurationInfo();
 
-            if(hours == 0 && minutes > 0 && minutes < 10){
+            if(hours == 0 && minutes > 0 && minutes < 5){
                 cost = 0;
             }
-            else if(cabArrivalDuration/60 > 10){
-                cost = BASECHARGE;
-            }
-            else
+
+            else if(distdurInfo[1] < 10){
                 cost = 100;
+            }
+
+            else
+                cost = BASECHARGE;
 
             AlertDialog.Builder builder = new AlertDialog.Builder(this);
 
@@ -519,14 +609,26 @@ public class MainActivity extends ActionBarActivity implements android.location.
             // Add the buttons
             builder.setView(view)
                     // Add action buttons
-                    .setPositiveButton(R.string.cancel_ride, new DialogInterface.OnClickListener() {
+                    .setPositiveButton(R.string.accept, new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int id) {
                             // todo when user cancels ride
 
                             awaitingRide = inRide = ratingPending = false;
+                            CancelRideTask cancelRide = new CancelRideTask(authenticationHeader);
+                            try {
+                                String cancelRideResult = cancelRide.execute("http://www.hoi.co.in/api/cancelride/"+rideRequestId).get();
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            } catch (ExecutionException e) {
+                                e.printStackTrace();
+                            }
                             stoptimertask();
-                            onCreateView();
+                            try {
+                                onCreateView();
+                            } catch (JSONException e) {
+                                e.printStackTrace();
+                            }
 
                         }
                     })
@@ -539,9 +641,10 @@ public class MainActivity extends ActionBarActivity implements android.location.
             // Create the AlertDialog
 
             AlertDialog dialog = builder.create();
-            TextView tvCost = (TextView) findViewById(R.id.cancel_cost);
-            tvCost.setText("Cost for Cacellation : " + cost);
+            TextView tvCost = (TextView) findViewById(R.id.cancelcost);
+            tvCost.setText("Rs " + String.valueOf(cost));
             dialog.show();
+
         }else if(inRide){
             // do nothing
         }
@@ -549,7 +652,6 @@ public class MainActivity extends ActionBarActivity implements android.location.
             //do nothing
         }
         else {
-            System.out.println("Confirm Ride Dialogue");
             int minFare = BASECHARGE;
             int maxFare = BASECHARGE;
 
@@ -564,23 +666,17 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
                 AlertDialog.Builder builder = new AlertDialog.Builder(this);
 
-                /*
-                minFare = (int)Math.max(Math.ceil(3.5 * calculateDistance(sLatitude, sLongitude, dLatitude, dLongitude)
-                            + 0.5 * calculateTime(sLatitude, sLongitude, dLatitude, dLongitude)), minFare);
+                LatLng sourceCoordinate = new LatLng(sLatitude, sLongitude);
+                LatLng destinationCoordinate = new LatLng(dLatitude, dLongitude);
+
+                DistanceDurationInfo getDistDurInfoTask = new DistanceDurationInfo(sourceCoordinate, destinationCoordinate);
+                float[] journeyDetails  = getDistDurInfoTask.googleDistanceDurationInfo();
 
 
-                maxFare = (int) Math.max(Math.ceil(10 * calculateDistance(sLatitude, sLongitude, dLatitude, dLongitude)
-                        + 0.5 * calculateTime(sLatitude, sLongitude, dLatitude, dLongitude)), 30);
-                */
-
-                DistanceDurationInfo getDistDurInfoTask = new DistanceDurationInfo(sourceCoordinate.latitude, sourceCoordinate.longitude,
-                        destinationCoordinate.latitude, destinationCoordinate.longitude);
-                String str_result = getDistDurInfoTask.execute().get();
-
-                minFare = (int)Math.max(Math.ceil(3.5 * cabDistanceAway/1000
-                        + 0.5 * cabArrivalDuration/60), minFare);
-                maxFare = (int)Math.max(Math.ceil(10 * cabDistanceAway/1000
-                        + 0.5 * cabArrivalDuration/60), maxFare);
+                minFare = (int)Math.max(Math.ceil(3.5 * journeyDetails[0]
+                        + 0.5 * journeyDetails[1]), minFare);
+                maxFare = (int)Math.max(Math.ceil(10 * journeyDetails[0]
+                        + 0.5 * journeyDetails[1]), maxFare);
                 // Get the layout inflater
                 LayoutInflater inflater = this.getLayoutInflater();
                 view = inflater.inflate(R.layout.confirm_dialog, null);
@@ -595,10 +691,20 @@ public class MainActivity extends ActionBarActivity implements android.location.
                                         dLongitude, dAddress[0], dAddress[1]);
 
                                 CabBookingTask bookCab = new CabBookingTask(authenticationHeader);
-                                bookCab.execute("http://www.hoi.co.in/api/createriderequest");
+                                try {
+                                    String res = bookCab.execute("http://www.hoi.co.in/api/createriderequest").get();
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                } catch (ExecutionException e) {
+                                    e.printStackTrace();
+                                }
 
                                 awaitingRide = true;
-                                onCreateView();
+                                try {
+                                    onCreateView();
+                                } catch (JSONException e) {
+                                    e.printStackTrace();
+                                }
 
                             }
                         })
@@ -620,7 +726,6 @@ public class MainActivity extends ActionBarActivity implements android.location.
                 TextView destinationAdd2 = (TextView) view.findViewById(R.id.destination_address2);
                 destinationAdd2.setText(dAddress[1]);
                 TextView fare = (TextView) view.findViewById(R.id.ride_fare);
-
                 fare.setText("FARE : "+ minFare + " to " + maxFare);
 
 
@@ -634,14 +739,19 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
     }
 
-    public void startRide(View view){
+    public void startRide(View view) throws ExecutionException, InterruptedException, JSONException {
         if(awaitingRide){
             awaitingRide = false;
             inRide = true;
+            StartRideTask startRide = new StartRideTask(authenticationHeader);
+            String str_result = startRide.execute("http://www.hoi.co.in/api/startride/"+rideRequestId).get();
+            stoptimertask();
             onCreateView();
         }
         else if(inRide){
             inRide = awaitingRide = false;
+            CloseRideTask closeRide = new CloseRideTask(authenticationHeader);
+            String str_result = closeRide.execute("http://www.hoi.co.in/api/closeride/"+rideRequestId).get();
             onCreateView();
             //Todo check for rating pending for driver and co-pasengers
         }
@@ -827,9 +937,20 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
         // Getting longitude of the current location
         double longitude = location.getLongitude();
+        float segmentDistance = calculateDistance(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude,
+                latitude, longitude);
+        int segmentDuration = (int) calculateTime(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude,
+                latitude, longitude);
+        distanceTravelled = distanceTravelled + segmentDistance;
+        durationTravelled = durationTravelled + segmentDuration;
+
+        cabFare = cabFare + billingRate * segmentDistance + 0.5f * segmentDuration;
 
         // Creating a LatLng object for the current location
         currentLocationCoordinate = new LatLng(latitude, longitude);
+
+        UpdateRideTask updateRide = new UpdateRideTask(authenticationHeader);
+        updateRide.execute("http://www.hoi.co.in/api/update/"+rideRequestId);
 
         CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(currentLocationCoordinate, 15);
         mGoogleMap.animateCamera(yourLocation);
@@ -961,6 +1082,31 @@ public class MainActivity extends ActionBarActivity implements android.location.
      * Booking ride related methods
      */
 
+    public void getCabBookingData() throws JSONException {
+        cabBookingDetails = new CabBookingDetails(cabBookinginfo.getDouble("origin_latitude"),cabBookinginfo.getDouble("origin_longitude"),
+                cabBookinginfo.getString("origin_address1"),cabBookinginfo.getString("origin_address2"),cabBookinginfo.getDouble("destination_latitude"),
+                cabBookinginfo.getDouble("destination_longitude"),cabBookinginfo.getString("destination_address1"),
+                cabBookinginfo.getString("destination_address2"));
+        cabBookingDetails.requestdatetime = cabBookinginfo.getString("requestdatetime");
+    }
+
+    public void getCabAwaitingData() throws  JSONException{
+        JSONObject carInfo  = cabawaitinginfo.getJSONObject("carinfo");
+
+        CarDetail carDetails = new CarDetail(carInfo.getInt("id"),carInfo.getString("regnumber"),
+                carInfo.getString("model"), carInfo.getString("make"),carInfo.getString("color"));
+
+        rideDetails = new RideDetail(cabawaitinginfo.getDouble("ridelastlong"),cabawaitinginfo.getDouble("ridelastlat"),
+                carDetails, cabawaitinginfo.getString("drivername"), cabawaitinginfo.getString("driverpic"),cabawaitinginfo.getString("driverphone"),
+                cabawaitinginfo.getString("driverbgc"),cabawaitinginfo.getInt("occupancy"), (float) cabawaitinginfo.getDouble("billingrate"),
+                cabawaitinginfo.getInt("riderequestid"));
+
+        cabLatestCoordinate = new LatLng(cabawaitinginfo.getDouble("ridelastlat"), cabawaitinginfo.getDouble("ridelastlong"));
+
+        rideRequestId = cabawaitinginfo.getInt("riderequestid");
+    }
+
+
     private float calculateDistance(Double slat, Double slong, Double dlat, Double dlong){
         float distance =  0.0f;
         distance = (float)(142.6 * Math.sqrt(Math.pow(Math.abs(slat-dlat),2)+Math.pow(Math.abs(slong-dlong),2)));
@@ -974,122 +1120,6 @@ public class MainActivity extends ActionBarActivity implements android.location.
     }
 
     /*
-     * Asynchronous task to get the estimated distance and duration using
-     * Google directions API
-     */
-    private class DistanceDurationInfo extends AsyncTask<Void, Void, String> {
-
-        private HttpResponse response;
-        StringBuilder stringBuilder = new StringBuilder();
-        private String mKey = "key=AIzaSyBrl-RRzrwGisYJpFI2QhpcCeknXg_bSmw";
-        private double slat, slong, dlat, dlong;
-
-        public DistanceDurationInfo(double slat, double slong, double dlat, double dlong){
-            this.slat = slat;
-            this.slong = slong;
-            this.dlat = dlat;
-            this.dlong = dlong;
-        }
-
-
-        @Override
-        protected String doInBackground(Void... params) {
-            // TODO: attempt authentication against a network service.
-            try {
-
-                String url = "https://maps.googleapis.com/maps/api/directions/json?origin=" + slat + "," +
-                        slong + "&destination=" + dlat + "," + dlong + "&mode=driving&sensor=false&units=metric"+"&"+mKey;
-
-                HttpPost httppost = new HttpPost(url);
-
-                HttpClient client = new DefaultHttpClient();
-                stringBuilder = new StringBuilder();
-
-
-                response = client.execute(httppost);
-
-            } catch (ClientProtocolException e) {
-            } catch (IOException e) {
-            }
-
-
-
-            System.out.println("ch3");
-            InputStream inputStream = null;
-            String result = null;
-            try {
-                System.out.println("ch4");
-                HttpEntity entity = response.getEntity();
-
-                inputStream = entity.getContent();
-                // json is UTF-8 by default
-                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"), 8);
-                StringBuilder sb = new StringBuilder();
-
-                System.out.println("ch5");
-                String line = null;
-                while ((line = reader.readLine()) != null)
-                {
-                    sb.append(line + "\n");
-                }
-                result = sb.toString();
-            } catch (Exception e) {
-                // Oops
-            }
-            finally {
-                System.out.println(result);
-                try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
-            }
-
-            return result;
-        }
-
-
-
-        @Override
-        protected void onPostExecute(final String data) {
-
-
-            if (data != null) {
-
-                JSONObject jsonObject = new JSONObject();
-                try {
-
-                    jsonObject = new JSONObject(data);
-
-                    JSONArray array = jsonObject.getJSONArray("routes");
-
-                    JSONObject routes = array.getJSONObject(0);
-
-                    JSONArray legs = routes.getJSONArray("legs");
-
-                    JSONObject steps = legs.getJSONObject(0);
-
-                    JSONObject distance = steps.getJSONObject("distance");
-
-                    JSONObject duration = steps.getJSONObject("duration");
-
-                    cabDistanceAway = Integer.parseInt(distance.getString("value"));
-                    cabArrivalDuration = Integer.parseInt(duration.getString("value"));
-                    System.out.println(cabDistanceAway + " " + cabArrivalDuration);
-                } catch (JSONException e) {
-                    // TODO Auto-generated catch block
-                    e.printStackTrace();
-                }
-
-            } else {
-                //Todo if no data come from server
-
-            }
-        }
-
-        @Override
-        protected void onCancelled() {
-
-        }
-    }
-
-    /*
      * Represents an asynchronous cab booking task used to authenticate
      * the ride.
      */
@@ -1097,6 +1127,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
         private final String authHeader;
         private HttpResponse response;
+        private JSONObject jObject;
 
         CabBookingTask(String authHeader) {
             this.authHeader = authHeader;
@@ -1107,7 +1138,6 @@ public class MainActivity extends ActionBarActivity implements android.location.
             // TODO: attempt authentication against a network service.
             SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
             String currentDateandTime = sdf.format(new Date());
-            System.out.println(currentDateandTime);
             cabBookingDetails.requestdatetime = currentDateandTime;
             System.out.println(cabBookingDetails.requestdatetime);
             Encryptor encryptor = new Encryptor();
@@ -1138,20 +1168,19 @@ public class MainActivity extends ActionBarActivity implements android.location.
                 String json = "";
 
                 // 3. build jsonObject
-                JSONObject jsonObject = new JSONObject();
-                jsonObject.accumulate("origin_latitude", cabBookingDetails.origin_latitude);
-                jsonObject.accumulate("origin_longitude", cabBookingDetails.origin_longitude);
-                jsonObject.accumulate("origin_address1", cabBookingDetails.origin_address1);
-                jsonObject.accumulate("origin_address2", cabBookingDetails.origin_address2);
-                jsonObject.accumulate("destination_latitude", cabBookingDetails.destination_latitude);
-                jsonObject.accumulate("destination_longitude", cabBookingDetails.destination_longitude);
-                jsonObject.accumulate("destination_address1", cabBookingDetails.destination_address1);
-                jsonObject.accumulate("destination_address2", cabBookingDetails.destination_address2);
-                jsonObject.accumulate("requestdatetime", cabBookingDetails.requestdatetime);
+                cabBookinginfo = new JSONObject();
+                cabBookinginfo.accumulate("origin_latitude", cabBookingDetails.origin_latitude);
+                cabBookinginfo.accumulate("origin_longitude", cabBookingDetails.origin_longitude);
+                cabBookinginfo.accumulate("origin_address1", cabBookingDetails.origin_address1);
+                cabBookinginfo.accumulate("origin_address2", cabBookingDetails.origin_address2);
+                cabBookinginfo.accumulate("destination_latitude", cabBookingDetails.destination_latitude);
+                cabBookinginfo.accumulate("destination_longitude", cabBookingDetails.destination_longitude);
+                cabBookinginfo.accumulate("destination_address1", cabBookingDetails.destination_address1);
+                cabBookinginfo.accumulate("destination_address2", cabBookingDetails.destination_address2);
+                cabBookinginfo.accumulate("requestdatetime", cabBookingDetails.requestdatetime);
 
                 // 4. convert JSONObject to JSON to String
-                json = jsonObject.toString();
-                System.out.println(json);
+                json = cabBookinginfo.toString();
 
                 // 5. set json to StringEntity
 
@@ -1207,9 +1236,13 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
             if (data != null) {
 
-                System.out.println(data);
-                //ParserTask rideDataParserTask = new ParserTask();
-               // rideDataParserTask.execute(data);
+                try {
+                    cabawaitinginfo = new JSONObject(data);
+                    getCabAwaitingData();
+
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
 
             } else {
                 //Todo if no data come from server
@@ -1220,46 +1253,6 @@ public class MainActivity extends ActionBarActivity implements android.location.
         @Override
         protected void onCancelled() {
 
-        }
-    }
-
-    /** A class to parse the Ride Details send by server in JSON format*/
-    private class ParserTask extends AsyncTask<String, Integer, HashMap<String,String>>{
-
-
-        @Override
-        protected HashMap<String, String> doInBackground(String... jsonData) {
-
-            JSONObject jObject;
-            HashMap<String, String> list = null;
-
-            try{
-                jObject = new JSONObject(jsonData[0]);
-                RideDetailParser rideDetailParser = new RideDetailParser();
-                // Getting the parsed data as a List construct
-                list = rideDetailParser.parse(jObject);
-            }catch(Exception e){
-                Log.d("Exception", e.toString());
-            }
-            return list;
-        }
-
-        @Override
-        protected void onPostExecute(HashMap<String, String> result) {
-
-            CarDetail carDetails = new CarDetail(Integer.parseInt(result.get("carid")), result.get("carregnumber"),
-                    result.get("carmodel"), result.get("carmake"), result.get("carcolor"));
-
-            rideDetails = new RideDetail(Double.parseDouble(result.get("ridelastlat")),Double.parseDouble(result.get("ridelastlong")),
-                    carDetails, result.get("drivername"), result.get("driverpic"), result.get("driverphone"),
-                    result.get("driverbgc"), Integer.parseInt(result.get("occupancy")), (float) Double.parseDouble(result.get("billingrate")),
-                    Integer.parseInt(result.get("riderequestid")));
-
-            cabLatestCoordinate = new LatLng(Double.parseDouble(result.get("ridelastlat")),Double.parseDouble(result.get("ridelastlong")));
-
-            rideRequestId = Integer.parseInt(result.get("riderequestid"));
-
-            //Todo after getting the name value pairs of ride
         }
     }
 
@@ -1363,6 +1356,525 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
                     CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(cabLatestCoordinate, 15);
                     mGoogleMap.animateCamera(yourLocation);
+
+
+                }catch(Exception e){
+                    Log.d("Exception", e.toString());
+                }
+
+            } else {
+                //Todo if no data come from server
+
+            }
+        }
+
+        @Override
+        protected void onCancelled() {
+
+        }
+    }
+
+    private class StartRideTask extends AsyncTask<String, Void, String> {
+
+        private final String authHeader;
+        private HttpResponse response;
+
+        StartRideTask(String authHeader) {
+            this.authHeader = authHeader;
+        }
+
+        @Override
+        protected String doInBackground(String... url) {
+            // TODO: attempt authentication against a network service.
+            SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
+            String currentDateandTime = sdf.format(new Date());
+            Encryptor encryptor = new Encryptor();
+            String encrptedkey = "";
+
+            try {
+                encrptedkey = encryptor.getEncryptedKeyValue(currentDateandTime);
+            } catch (InvalidKeyException e1) {
+                e1.printStackTrace();
+            } catch (IllegalBlockSizeException e1) {
+                e1.printStackTrace();
+            } catch (BadPaddingException e1) {
+                e1.printStackTrace();
+            } catch (UnsupportedEncodingException e1) {
+                e1.printStackTrace();
+            } catch (DecoderException e1) {
+                e1.printStackTrace();
+            }
+
+            try {
+
+                System.out.println("ch1");
+                HttpPost request = new HttpPost(url[0]);
+                request.addHeader("Authorization", "Basic " + authHeader);
+                request.addHeader("androidkey",encrptedkey);
+                request.addHeader("Content-Type", "application/json");
+
+                String json = "";
+
+                // 3. build jsonObject
+                JSONObject jsonObject = new JSONObject();
+                jsonObject.accumulate("ridelastlat", currentLocationCoordinate.latitude);
+                jsonObject.accumulate("ridelastlong", currentLocationCoordinate.longitude);
+                jsonObject.accumulate("requestdatetime", currentDateandTime);
+
+                // 4. convert JSONObject to JSON to String
+                json = jsonObject.toString();
+                System.out.println(json);
+
+                // 5. set json to StringEntity
+
+                request.setEntity(new StringEntity(json));
+                HttpClient httpclient = new DefaultHttpClient();
+                try {
+                    System.out.println("ch2");
+                    response = httpclient.execute(request);
+
+                } catch (ClientProtocolException e) {
+                    e.printStackTrace();
+                }
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+
+            System.out.println("ch3");
+            InputStream inputStream = null;
+            String result = null;
+            try {
+                System.out.println("ch4");
+                HttpEntity entity = response.getEntity();
+
+                inputStream = entity.getContent();
+                // json is UTF-8 by default
+                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"), 8);
+                StringBuilder sb = new StringBuilder();
+
+                System.out.println("ch5");
+                String line = null;
+                while ((line = reader.readLine()) != null)
+                {
+                    sb.append(line + "\n");
+                }
+                result = sb.toString();
+            } catch (Exception e) {
+                // Oops
+            }
+            finally {
+                System.out.println(result);
+                try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
+            }
+
+            return result;
+        }
+
+        @Override
+        protected void onPostExecute(final String data) {
+
+
+            JSONObject jObject;
+
+            if (data != null) {
+
+                try{
+                    jObject = new JSONObject(data);
+                    cabLatestCoordinate = new LatLng(jObject.getDouble("ridelastlat"),jObject.getDouble("ridelastlong"));
+                    billingRate = (float)jObject.getDouble("billingrate");
+
+                    IconGenerator iconFactory = new IconGenerator(MainActivity.this);
+                    iconFactory.setColor(Color.YELLOW);
+                    cabMarker = addIcon(iconFactory, "HOI CAB", cabLatestCoordinate);
+
+                    CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(cabLatestCoordinate, 15);
+                    mGoogleMap.animateCamera(yourLocation);
+
+                }catch(Exception e){
+                    Log.d("Exception", e.toString());
+                }
+
+            } else {
+                //Todo if no data come from server
+
+            }
+        }
+
+        @Override
+        protected void onCancelled() {
+
+        }
+    }
+
+    private class UpdateRideTask extends AsyncTask<String, Void, String> {
+
+        private final String authHeader;
+        private HttpResponse response;
+
+        UpdateRideTask(String authHeader) {
+            this.authHeader = authHeader;
+        }
+
+        @Override
+        protected String doInBackground(String... url) {
+            // TODO: attempt authentication against a network service.
+            SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
+            String currentDateandTime = sdf.format(new Date());
+            Encryptor encryptor = new Encryptor();
+            String encrptedkey = "";
+
+            try {
+                encrptedkey = encryptor.getEncryptedKeyValue(currentDateandTime);
+            } catch (InvalidKeyException e1) {
+                e1.printStackTrace();
+            } catch (IllegalBlockSizeException e1) {
+                e1.printStackTrace();
+            } catch (BadPaddingException e1) {
+                e1.printStackTrace();
+            } catch (UnsupportedEncodingException e1) {
+                e1.printStackTrace();
+            } catch (DecoderException e1) {
+                e1.printStackTrace();
+            }
+
+            try {
+
+                System.out.println("ch1");
+                HttpPost request = new HttpPost(url[0]);
+                request.addHeader("Authorization", "Basic " + authHeader);
+                request.addHeader("androidkey",encrptedkey);
+                request.addHeader("Content-Type", "application/json");
+
+                String json = "";
+
+                // 3. build jsonObject
+                JSONObject jsonObject = new JSONObject();
+                jsonObject.accumulate("ridelastlat", currentLocationCoordinate.latitude);
+                jsonObject.accumulate("ridelastlonglong", currentLocationCoordinate.longitude);
+                jsonObject.accumulate("requestdatetime", currentDateandTime);
+                jsonObject.accumulate("estimateddistance", distanceTravelled);
+                jsonObject.accumulate("estimatedtime", durationTravelled);
+                jsonObject.accumulate("estimatedfare", cabFare);
+
+                if((++stateCounter)%10 == 0){
+                    Geocoder gcd = new Geocoder(MainActivity.this, Locale.getDefault());
+                    List<Address> addresses = gcd.getFromLocation(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude, 1);
+                    if (addresses.size() > 0)
+                        jsonObject.accumulate("state", addresses.get(0).getAdminArea());
+                    else
+                        jsonObject.accumulate("state", "");
+                }
+                else jsonObject.accumulate("state", "");
+
+                // 4. convert JSONObject to JSON to String
+                json = jsonObject.toString();
+                System.out.println(json);
+
+                // 5. set json to StringEntity
+
+                request.setEntity(new StringEntity(json));
+                HttpClient httpclient = new DefaultHttpClient();
+                try {
+                    System.out.println("ch2");
+                    response = httpclient.execute(request);
+
+                } catch (ClientProtocolException e) {
+                    e.printStackTrace();
+                }
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+
+            System.out.println("ch3");
+            InputStream inputStream = null;
+            String result = null;
+            try {
+                System.out.println("ch4");
+                HttpEntity entity = response.getEntity();
+
+                inputStream = entity.getContent();
+                // json is UTF-8 by default
+                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"), 8);
+                StringBuilder sb = new StringBuilder();
+
+                System.out.println("ch5");
+                String line = null;
+                while ((line = reader.readLine()) != null)
+                {
+                    sb.append(line + "\n");
+                }
+                result = sb.toString();
+            } catch (Exception e) {
+                // Oops
+            }
+            finally {
+                System.out.println(result);
+                try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
+            }
+
+            return result;
+        }
+
+        @Override
+        protected void onPostExecute(final String data) {
+
+
+            JSONObject jObject;
+
+            if (data != null) {
+
+                try{
+                    jObject = new JSONObject(data);
+                    cabLatestCoordinate = new LatLng(jObject.getDouble("ridelastlat"),jObject.getDouble("ridelastlong"));
+
+                    billingRate = (float) jObject.getDouble("billingrate");
+
+                    IconGenerator iconFactory = new IconGenerator(MainActivity.this);
+                    iconFactory.setColor(Color.YELLOW);
+                    cabMarker = addIcon(iconFactory, "HOI CAB", cabLatestCoordinate);
+
+                    CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(cabLatestCoordinate, 15);
+                    mGoogleMap.animateCamera(yourLocation);
+
+
+                }catch(Exception e){
+                    Log.d("Exception", e.toString());
+                }
+
+            } else {
+                //Todo if no data come from server
+
+            }
+        }
+
+        @Override
+        protected void onCancelled() {
+
+        }
+    }
+
+    private class CancelRideTask extends AsyncTask<String, Void, String> {
+
+        private final String authHeader;
+        private HttpResponse response;
+
+        CancelRideTask(String authHeader) {
+            this.authHeader = authHeader;
+        }
+
+        @Override
+        protected String doInBackground(String... url) {
+            // TODO: attempt authentication against a network service.
+            SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
+            String currentDateandTime = sdf.format(new Date());
+            Encryptor encryptor = new Encryptor();
+            String encrptedkey = "";
+
+            try {
+                encrptedkey = encryptor.getEncryptedKeyValue(currentDateandTime);
+            } catch (InvalidKeyException e1) {
+                e1.printStackTrace();
+            } catch (IllegalBlockSizeException e1) {
+                e1.printStackTrace();
+            } catch (BadPaddingException e1) {
+                e1.printStackTrace();
+            } catch (UnsupportedEncodingException e1) {
+                e1.printStackTrace();
+            } catch (DecoderException e1) {
+                e1.printStackTrace();
+            }
+
+            try {
+
+                HttpPost request = new HttpPost(url[0]);
+                request.addHeader("Authorization", "Basic " + authHeader);
+                request.addHeader("androidkey",encrptedkey);
+
+                HttpClient httpclient = new DefaultHttpClient();
+                try {
+                    response = httpclient.execute(request);
+
+                } catch (ClientProtocolException e) {
+                    e.printStackTrace();
+                }
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            InputStream inputStream = null;
+            String result = null;
+            try {
+                HttpEntity entity = response.getEntity();
+
+                inputStream = entity.getContent();
+                // json is UTF-8 by default
+                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"), 8);
+                StringBuilder sb = new StringBuilder();
+
+                String line = null;
+                while ((line = reader.readLine()) != null)
+                {
+                    sb.append(line + "\n");
+                }
+                result = sb.toString();
+            } catch (Exception e) {
+                // Oops
+            }
+            finally {
+                System.out.println("Cancel Ride :"+result);
+                try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
+            }
+
+            return result;
+        }
+
+        @Override
+        protected void onPostExecute(final String data) {
+
+
+            JSONObject jObject;
+
+            if (data != null) {
+
+                try{
+                    jObject = new JSONObject(data);
+                    cabLatestCoordinate = new LatLng(jObject.getDouble("ridelastlat"),jObject.getDouble("ridelastlong"));
+
+                    billingRate = (float) jObject.getDouble("billingrate");
+
+
+                }catch(Exception e){
+                    Log.d("Exception", e.toString());
+                }
+
+            } else {
+                //Todo if no data come from server
+
+            }
+        }
+
+        @Override
+        protected void onCancelled() {
+
+        }
+    }
+
+    private class CloseRideTask extends AsyncTask<String, Void, String> {
+
+        private final String authHeader;
+        private HttpResponse response;
+
+        CloseRideTask(String authHeader) {
+            this.authHeader = authHeader;
+        }
+
+        @Override
+        protected String doInBackground(String... url) {
+            // TODO: attempt authentication against a network service.
+            SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
+            String currentDateandTime = sdf.format(new Date());
+            Encryptor encryptor = new Encryptor();
+            String encrptedkey = "";
+
+            try {
+                encrptedkey = encryptor.getEncryptedKeyValue(currentDateandTime);
+            } catch (InvalidKeyException e1) {
+                e1.printStackTrace();
+            } catch (IllegalBlockSizeException e1) {
+                e1.printStackTrace();
+            } catch (BadPaddingException e1) {
+                e1.printStackTrace();
+            } catch (UnsupportedEncodingException e1) {
+                e1.printStackTrace();
+            } catch (DecoderException e1) {
+                e1.printStackTrace();
+            }
+
+            try {
+
+                System.out.println("ch1");
+                HttpPost request = new HttpPost(url[0]);
+                request.addHeader("Authorization", "Basic " + authHeader);
+                request.addHeader("androidkey",encrptedkey);
+
+                List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>(1);
+                nameValuePairs.add(new BasicNameValuePair("counter", currentDateandTime));
+
+                request.setEntity(new UrlEncodedFormEntity(nameValuePairs));
+
+
+                HttpClient httpclient = new DefaultHttpClient();
+                try {
+                    System.out.println("ch2");
+                    response = httpclient.execute(request);
+
+                } catch (ClientProtocolException e) {
+                    e.printStackTrace();
+                }
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            System.out.println("ch3");
+            InputStream inputStream = null;
+            String result = null;
+            try {
+                System.out.println("ch4");
+                HttpEntity entity = response.getEntity();
+
+                inputStream = entity.getContent();
+                // json is UTF-8 by default
+                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"), 8);
+                StringBuilder sb = new StringBuilder();
+
+                System.out.println("ch5");
+                String line = null;
+                while ((line = reader.readLine()) != null)
+                {
+                    sb.append(line + "\n");
+                }
+                result = sb.toString();
+            } catch (Exception e) {
+                // Oops
+            }
+            finally {
+                System.out.println(result);
+                try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
+            }
+
+            return result;
+        }
+
+        @Override
+        protected void onPostExecute(final String data) {
+
+
+            JSONObject jObject;
+
+            if (data != null) {
+
+                try{
+                    jObject = new JSONObject(data);
+                    //driverRating = jObject.getInt("driverrating");
+                   // cabLatestCoordinate = new LatLng(jObject.getDouble("ridelastlat"),jObject.getDouble("ridelastlong"));
+
+                  //  billingRate = (float) jObject.getDouble("billingrate");
+
+                    //IconGenerator iconFactory = new IconGenerator(MainActivity.this);
+                    //iconFactory.setColor(Color.YELLOW);
+                    //cabMarker = addIcon(iconFactory, "HOI CAB", cabLatestCoordinate);
+
+//                    CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(cabLatestCoordinate, 15);
+  //                  mGoogleMap.animateCamera(yourLocation);
+                    //System.out.println(driverRating);
 
 
                 }catch(Exception e){

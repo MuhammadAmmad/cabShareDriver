@@ -15,9 +15,9 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@drawable/ic_launcher"
+        android:icon="@drawable/ic_logo"
         android:label="@string/app_name"
-        android:theme="@style/Theme.AppCompat.Light">
+        android:theme="@style/AppTheme">
         <meta-data
             android:name="com.google.android.gms.version"
             android:value="@integer/google_play_services_version" />
@@ -26,7 +26,7 @@
             android:value="@string/google_maps_key" />
 
         <activity
-            android:name=".SplashScreen"
+            android:name=".LoginActivity"
             android:label="@string/app_name" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -41,8 +41,7 @@
         </activity>
 
         <activity android:label="@string/app_name" android:name=".SearchActivity"/>
-        <activity android:label="@string/app_name" android:name=".LoginActivity"/>
-
+        <activity android:label="Hoi" android:name=".SplashScreen"/>
     </application>
 
 </manifest>

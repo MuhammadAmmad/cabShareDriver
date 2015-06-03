@@ -39,5 +39,9 @@
     <string name="MY_PREFS_FILE_NAME">sharecabshoi</string>
     <string name="Start">Start Ride</string>
     <string name="cancel_ride">Cancel Ride</string>
+    <string name="Close">Close</string>
+    <string name="login_attempt">Logging In</string>
+    <string name="startRide">Start Ride</string>
+    <string name="start_ride">Start Ride</string>
 
 </resources>
