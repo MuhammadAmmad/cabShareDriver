@@ -23,20 +23,27 @@ import android.support.v4.app.ActionBarDrawerToggle;
 import android.support.v4.app.LoaderManager.LoaderCallbacks;
 import android.support.v4.content.CursorLoader;
 import android.support.v4.content.Loader;
-import android.support.v4.view.GravityCompat;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.ActionBarActivity;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
+import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.HorizontalScrollView;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.PopupWindow;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -84,10 +91,11 @@ import java.util.concurrent.ExecutionException;
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 
+import de.hdodenhof.circleimageview.CircleImageView;
+
 public class MainActivity extends ActionBarActivity implements android.location.LocationListener,GoogleMap.OnMapClickListener,LoaderCallbacks<Cursor>,GoogleMap.OnMarkerDragListener {
 
     private static String authenticationHeader;
-    private String userData;
     /*
      * variables for source and destination on map
      */
@@ -102,14 +110,22 @@ public class MainActivity extends ActionBarActivity implements android.location.
     /*
      *   variables for navigation drawer
      */
+
+    private Toolbar toolbar;                              // Declaring the Toolbar Object
+
+    RecyclerView mRecyclerView;                           // Declaring RecyclerView
+    RecyclerView.Adapter mAdapter;                        // Declaring Adapter For Recycler View
+    RecyclerView.LayoutManager mLayoutManager;            // Declaring Layout Manager as a linear layout manager
+    DrawerLayout Drawer;                                  // Declaring DrawerLayout
+
+    ActionBarDrawerToggle mDrawerToggle;                  // Declaring Action Bar Drawer Toggle
+
+
     private CharSequence mDrawerTitle;
     private CharSequence mTitle;
-    CustomDrawerAdapter adapter;
     List<DrawerItem> dataList;
     private ListView mDrawerList;
     private DrawerLayout mDrawerLayout;
-    private ArrayAdapter<String> mAdapter;
-    private ActionBarDrawerToggle mDrawerToggle;
     private String mActivityTitle;
     private boolean checkForGPS;
 
@@ -120,6 +136,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
     
     private CabBookingDetails cabBookingDetails;
     private  RideDetail rideDetails;
+
     private int rideRequestId;
     private int cabArrivalDuration;
     private int cabDistanceAway;
@@ -137,10 +154,16 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
     //rating related variables
     private int driverRating = 0;
+    private int pass1Rating = 0;
+    private int pass2Rating = 0;
+    private int pass3Rating = 0;
+    private int pass4Rating = 0;
 
 
-    JSONObject cabBookinginfo;
-    JSONObject cabawaitinginfo;
+
+    JSONObject cabBookingData;
+    JSONObject cabAwaitingData;
+    JSONObject userData;
 
 
     final Handler handler = new Handler();
@@ -159,40 +182,91 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
+
         prefs= ObscuredSharedPreferences.getPrefs(this, "Hoi Cabs", Context.MODE_PRIVATE);
+        String TITLES[] = {"Home","Wallet","Contact Us","Complaint","Help"};
+        int ICONS[] = {R.drawable.ic_home,R.drawable.ic_wallet,R.drawable.ic_contact,R.drawable.ic_comp,R.drawable.ic_favorite};
+        String NAME ="", EMAIL="", PICURL="";
+
+        try {
+
+            userData = new JSONObject(getIntent().getStringExtra("userData"));
+            inRide = userData.getBoolean("inaride");
+            awaitingRide = userData.getBoolean("awaitingride");
+            ratingPending = userData.getBoolean("hastorateprevious");
+            rideRequestId  = userData.getInt("genriderequestid");
+            NAME = userData.getString("name");
+            EMAIL = userData.getString("username");
+            PICURL = userData.getString("displaypic");
+            if(getIntent().hasExtra("authenticationHeader"))
+                authenticationHeader = getIntent().getStringExtra("authenticationHeader");
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
 
         //Updating the user state in applciation
-
-        inRide = getIntent().getBooleanExtra("inaride",false);
-        awaitingRide = getIntent().getBooleanExtra("awaitingride",false);
-        ratingPending = getIntent().getBooleanExtra("hastorateprevious",false);
         try {
         if(awaitingRide){
             if(prefs.contains("CabBookingDetail")) {
-                cabBookinginfo = new JSONObject(prefs.getString("CabBookingDetail", null));
+                cabBookingData = new JSONObject(prefs.getString("CabBookingDetail", null));
                 getCabBookingData();
             }
 
             if(prefs.contains("CabAwaitingDetail")) {
-                cabawaitinginfo = new JSONObject(prefs.getString("CabAwaitingDetail", null));
+                cabAwaitingData = new JSONObject(prefs.getString("CabAwaitingDetail", null));
                 getCabAwaitingData();
             }
-
-
         }
         } catch (JSONException e) {
             e.printStackTrace();
         }
 
 
-        if(getIntent().hasExtra("authenticationHeader"))
-            authenticationHeader = getIntent().getStringExtra("authenticationHeader");
 
-        rideRequestId = getIntent().getIntExtra("genriderequestid", 0);
 
         checkForGPS = false;
 
         // Initializing Navigation Drawer
+
+
+
+
+        mRecyclerView = (RecyclerView) findViewById(R.id.RecyclerView); // Assigning the RecyclerView Object to the xml View
+
+        mRecyclerView.setHasFixedSize(true);                            // Letting the system know that the list objects are of fixed size
+
+        mAdapter = new MyAdapter(TITLES,ICONS,NAME,EMAIL,R.drawable.male_user);       // Creating the Adapter of MyAdapter class(which we are going to see in a bit)
+        // And passing the titles,icons,header view name, header view email,
+        // and header view profile picture
+
+        mRecyclerView.setAdapter(mAdapter);                              // Setting the adapter to RecyclerView
+
+        mLayoutManager = new LinearLayoutManager(this);                 // Creating a layout Manager
+
+        mRecyclerView.setLayoutManager(mLayoutManager);                 // Setting the layout Manager
+
+
+        Drawer = (DrawerLayout) findViewById(R.id.drawer_layout);        // Drawer object Assigned to the view
+        mDrawerToggle = new ActionBarDrawerToggle(this, Drawer,
+                R.drawable.ic_drawer, R.string.drawer_open,
+                R.string.drawer_close) {
+            public void onDrawerClosed(View view) {
+                getSupportActionBar().setTitle(mTitle);
+                invalidateOptionsMenu(); // creates call to
+                // onPrepareOptionsMenu()
+            }
+
+            public void onDrawerOpened(View drawerView) {
+                getSupportActionBar().setTitle(mDrawerTitle);
+                invalidateOptionsMenu(); // creates call to
+                // onPrepareOptionsMenu()
+            }
+        };
+
+        Drawer.setDrawerListener(mDrawerToggle); // Drawer Listener set to the Drawer toggle
+        mDrawerToggle.syncState();               // Finally we set the drawer toggle sync State
+
+        /*
         dataList = new ArrayList<DrawerItem>();
         mTitle = mDrawerTitle = getTitle();
         mDrawerLayout = (DrawerLayout) findViewById(R.id.drawer_layout);
@@ -210,27 +284,14 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
         //sharedPreferences = ObscuredSharedPreferences.getPrefs(this,HOI_OBSCURED_PREFERENCES, Context.MODE_PRIVATE);
 
-        mDrawerToggle = new ActionBarDrawerToggle(this, mDrawerLayout,
-                R.drawable.ic_drawer, R.string.drawer_open,
-                R.string.drawer_close) {
-            public void onDrawerClosed(View view) {
-                getSupportActionBar().setTitle(mTitle);
-                invalidateOptionsMenu(); // creates call to
-                // onPrepareOptionsMenu()
-            }
 
-            public void onDrawerOpened(View drawerView) {
-                getSupportActionBar().setTitle(mDrawerTitle);
-                invalidateOptionsMenu(); // creates call to
-                // onPrepareOptionsMenu()
-            }
-        };
 
         mDrawerLayout.setDrawerListener(mDrawerToggle);
 
+
         if (savedInstanceState == null) {
             SelectItem(0);
-        }
+        }*/
 
         LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
 
@@ -302,14 +363,91 @@ public class MainActivity extends ActionBarActivity implements android.location.
         getIntent().setAction("Already created");
         }
 
+    private void addHorizontalScrollView(){
+
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(220, 220);
+        de.hdodenhof.circleimageview.CircleImageView c1 = new CircleImageView(getApplicationContext());
+        c1.setLayoutParams(layoutParams);
+        c1.setImageResource(R.drawable.male_user);
+        c1.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                createRatingDialog();
+            }
+        });
+
+
+        de.hdodenhof.circleimageview.CircleImageView c2 = new CircleImageView(getApplicationContext());
+        c2.setLayoutParams(layoutParams);
+        c2.setImageResource(R.drawable.male_user);
+        c2.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                createRatingDialog();
+            }
+        });
+
+        de.hdodenhof.circleimageview.CircleImageView c3 = new CircleImageView(getApplicationContext());
+        c3.setLayoutParams(layoutParams);
+        c3.setImageResource(R.drawable.male_user);
+        c3.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                createRatingDialog();
+            }
+        });
+
+        de.hdodenhof.circleimageview.CircleImageView c4 = new CircleImageView(getApplicationContext());
+        c4.setLayoutParams(layoutParams);
+        c4.setImageResource(R.drawable.male_user);
+        c4.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                createRatingDialog();
+            }
+        });
+
+        de.hdodenhof.circleimageview.CircleImageView cUnknown = new CircleImageView(getApplicationContext());
+        cUnknown.setLayoutParams(layoutParams);
+        cUnknown.setImageResource(R.drawable.male_user);
+        cUnknown.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                createRatingDialog();
+            }
+        });
+        LinearLayout hv = (LinearLayout) findViewById(R.id.pasengerlist);
+
+
+        hv.addView(c1);
+        hv.addView(c2);
+        hv.addView(c3);
+        hv.addView(c4);
+        hv.addView(cUnknown);
+    }
+
+    private void removeHorizontalScrollView(){
+        HorizontalScrollView hv = (HorizontalScrollView) findViewById(R.id.horizontalScrollView);
+        hv.removeAllViews();
+    }
+
+    private void createRatingDialog(){
+
+    }
+
     private void onCreateView () throws JSONException {
         System.out.println("Creating View depending on status");
         LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
-        Button bi = (Button)findViewById(R.id.shareCabRates);
+        ImageButton bi = (ImageButton)findViewById(R.id.shareCabRates);
         Button b1 = (Button) findViewById(R.id.search_source_button);
         Button b2 = (Button) findViewById(R.id.search_destination_button);
         Button b3 = (Button) findViewById(R.id.book_ride_button);
         Button b4 = (Button) findViewById(R.id.start_ride_button);
+        ImageButton iBsrc = (ImageButton)findViewById(R.id.save_source);
+        ImageButton iBdst = (ImageButton)findViewById(R.id.save_destination);
+
+
+
 
         /*
             Create view for user when he is waiting for his/her ride
@@ -320,6 +458,8 @@ public class MainActivity extends ActionBarActivity implements android.location.
             b3.setVisibility(View.VISIBLE);
             b4.setVisibility(View.VISIBLE);
             bi.setVisibility(View.INVISIBLE);
+            iBsrc.setVisibility(View.INVISIBLE);
+            iBdst.setVisibility(View.INVISIBLE);
 
             b1.setText("Track Your Ride");
             b3.setText("Cancel Cab");
@@ -340,10 +480,15 @@ public class MainActivity extends ActionBarActivity implements android.location.
             bi.setVisibility(View.INVISIBLE);
             b1.setVisibility(View.INVISIBLE);
             b2.setVisibility(View.INVISIBLE);
-            b3.setVisibility(View.INVISIBLE);
-            b4.setVisibility(View.VISIBLE);
+            b3.setVisibility(View.VISIBLE);
+            b4.setVisibility(View.INVISIBLE);
+            iBsrc.setVisibility(View.INVISIBLE);
+            iBdst.setVisibility(View.VISIBLE);
+            addHorizontalScrollView();
 
-            b4.setText("End Ride");
+
+
+            b3.setText("End Ride");
             setTitle("In Ride");
 
             mGoogleMap.setMyLocationEnabled(true);
@@ -363,6 +508,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
             CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(currentLocationCoordinate, 15);
             mGoogleMap.animateCamera(yourLocation);
+
         }
         /*
             View for user when he has not rated previous co-Passenger
@@ -375,6 +521,8 @@ public class MainActivity extends ActionBarActivity implements android.location.
             b2.setVisibility(View.INVISIBLE);
             b3.setVisibility(View.INVISIBLE);
             b4.setVisibility(View.INVISIBLE);
+            iBsrc.setVisibility(View.INVISIBLE);
+            iBdst.setVisibility(View.INVISIBLE);
             //b2.setVisibility(View.VISIBLE);
             //b1.setText("Set PickUp Loaction");
         }
@@ -386,13 +534,17 @@ public class MainActivity extends ActionBarActivity implements android.location.
             b1.setVisibility(View.VISIBLE);
             b2.setVisibility(View.VISIBLE);
             b3.setVisibility(View.VISIBLE);
+            iBsrc.setVisibility(View.VISIBLE);
+            iBdst.setVisibility(View.VISIBLE);
             b4.setVisibility(View.INVISIBLE);
-            b1.setText("Set PickUp Loaction");
+            b1.setText("Set PickUp Location");
             b2.setText("Set Drop Location");
             b3.setText("Book Cab");
 
             setTitle("Book Cab");
+            removeHorizontalScrollView();
             mGoogleMap.setMyLocationEnabled(false);
+            if(currentLocationCoordinate == null){
 
 
                 // Creating a criteria object to retrieve provider
@@ -407,6 +559,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
                 currentLocationCoordinate = new LatLng(location.getLatitude(), location.getLongitude());
 
+            }
 
             IconGenerator iconFactory = new IconGenerator(this);
             iconFactory.setColor(Color.GREEN);
@@ -421,6 +574,121 @@ public class MainActivity extends ActionBarActivity implements android.location.
     @Override
     public void onPause() {
         super.onPause();  // Always call the superclass method first
+    }
+
+    public void saveSource(View view){
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        final Double lat = sourceMarker.getPosition().latitude;
+        final Double lon = sourceMarker.getPosition().longitude;
+        final String address = getAddress(lat,lon)[0];
+        // Get the layout inflater
+        LayoutInflater inflater = this.getLayoutInflater();
+        View dview = inflater.inflate(R.layout.save_dialog, null);
+        final Spinner addtype = (Spinner)dview.findViewById(R.id.address_type);
+        ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(
+                this, R.array.address_type, android.R.layout.simple_spinner_item);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        addtype.setAdapter(adapter);
+        TextView tvadd = (TextView) dview.findViewById(R.id.address);
+        tvadd.setText(address);
+        // Add the buttons
+        builder.setView(dview)
+                // Add action buttons
+                .setPositiveButton(R.string.save, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int id) {
+                        // todo when user want to save the location
+
+                        try {
+                            JSONObject jObject = new JSONObject();
+                            jObject.put("latitude", lat);
+                            jObject.put("longitude", lon);
+                            jObject.put("address", address);
+                            if(prefs.contains(addtype.getSelectedItem().toString())){
+                                prefs.edit().remove(addtype.getSelectedItem().toString());
+                            }
+                            prefs.edit().putString(addtype.getSelectedItem().toString(), jObject.toString()).commit();
+
+
+                        } catch (JSONException e) {
+                            //todo when exception in saving json occurs
+
+                        }
+
+
+                    }
+                })
+                .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        //nothing to be done when user cancels his action
+                    }
+                });
+        // Set other dialog properties
+        // Create the AlertDialog
+
+        AlertDialog dialog = builder.create();
+        dialog.show();
+
+    }
+
+
+
+
+    public void saveDestination(View view){
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        final Double lat = destinationMarker.getPosition().latitude;
+        final Double lon = destinationMarker.getPosition().longitude;
+        final String address = getAddress(lat,lon)[0];
+
+
+        // Get the layout inflater
+        LayoutInflater inflater = this.getLayoutInflater();
+        View dview = inflater.inflate(R.layout.save_dialog, null);
+        final Spinner addtype = (Spinner)dview.findViewById(R.id.address_type);
+        ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(
+                this, R.array.address_type, android.R.layout.simple_spinner_item);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        addtype.setAdapter(adapter);
+        TextView tvadd = (TextView) dview.findViewById(R.id.address);
+        tvadd.setText(address);
+        // Add the buttons
+        builder.setView(dview)
+                // Add action buttons
+                .setPositiveButton(R.string.save, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int id) {
+                        Double lat = destinationMarker.getPosition().latitude;
+                        Double lon = destinationMarker.getPosition().longitude;
+                        String address = getAddress(lat, lon)[0];
+                        try {
+                            JSONObject jObject = new JSONObject();
+                            jObject.put("latitude", lat);
+                            jObject.put("longitude", lon);
+                            jObject.put("address", address);
+                            if (prefs.contains(addtype.getSelectedItem().toString())) {
+                                prefs.edit().remove(addtype.getSelectedItem().toString());
+                            }
+                            prefs.edit().putString(addtype.getSelectedItem().toString(), jObject.toString()).commit();
+
+
+                        } catch (JSONException e) {
+                            //todo when exception in saving json occurs
+
+                        }
+
+                    }
+                })
+                .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        //nothing to be done when user cancels his action
+                    }
+                });
+        // Set other dialog properties
+        // Create the AlertDialog
+
+        AlertDialog dialog = builder.create();
+
+        dialog.show();
     }
 
 
@@ -448,10 +716,6 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
     @Override
     protected void onStop() {
-        if(awaitingRide){
-            prefs.edit().putString("CabBookingDetail",cabBookinginfo.toString()).commit();
-            prefs.edit().putString("CabAwaitingDetail",cabawaitinginfo.toString()).commit();
-        }
         super.onStop();
     }
 
@@ -512,6 +776,17 @@ public class MainActivity extends ActionBarActivity implements android.location.
                 intent.putExtra("Location", "S");
                 intent.putExtra("CurrentLatitude", Double.toString(currentLocationCoordinate.latitude));
                 intent.putExtra("CurrentLongitude", Double.toString(currentLocationCoordinate.longitude));
+                String[] str = {"Home", "Office", "Favorite1", "Favorite2", "Favorite3"};
+                for(int i = 0 ; i < 5 ; i ++){
+                    if(prefs.contains(str[i])){
+                        try{
+                            JSONObject jsonObject = new JSONObject(prefs.getString(str[i],null));
+                            if(jsonObject != null) intent.putExtra(str[i], jsonObject.toString());
+                        }catch (JSONException e){
+                        }
+                    }
+                }
+
                 startActivityForResult(intent, 2);
             }
         }
@@ -529,10 +804,21 @@ public class MainActivity extends ActionBarActivity implements android.location.
                 intent.putExtra("Location", "D");
                 intent.putExtra("CurrentLatitude", Double.toString(currentLocationCoordinate.latitude));
                 intent.putExtra("CurrentLongitude", Double.toString(currentLocationCoordinate.longitude));
+                String[] str = {"Home", "Office", "Favorite1", "Favorite2", "Favorite3"};
+                for(int i = 0 ; i < 5 ; i ++){
+                    if(prefs.contains(str[i])){
+                        try{
+                            JSONObject jsonObject = new JSONObject(prefs.getString(str[i],null));
+                            if(jsonObject != null) intent.putExtra(str[i], jsonObject.toString());
+                        }catch (JSONException e){
+                        }
+                    }
+                }
                 startActivityForResult(intent, 3);
             }
 
     }
+
 
     @Override
     public void onBackPressed() {
@@ -570,7 +856,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
         }
     }
 
-    public void confirmRide(View view) throws ExecutionException, InterruptedException {
+    public void confirmRide(View view) throws ExecutionException, InterruptedException, JSONException {
 
         if(awaitingRide){
             float cost = 100.0f;
@@ -605,9 +891,10 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
             // Get the layout inflater
             LayoutInflater inflater = this.getLayoutInflater();
-            view = inflater.inflate(R.layout.cancel_ride_dialog, null);
+            View dView = inflater.inflate(R.layout.cancel_ride_dialog, null);
             // Add the buttons
-            builder.setView(view)
+
+            builder.setView(dView)
                     // Add action buttons
                     .setPositiveButton(R.string.accept, new DialogInterface.OnClickListener() {
                         @Override
@@ -632,7 +919,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
                         }
                     })
-                    .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
+                    .setNegativeButton(R.string.cont, new DialogInterface.OnClickListener() {
                         public void onClick(DialogInterface dialog, int id) {
                             //nothing to be done when user cancels his action
                         }
@@ -640,13 +927,19 @@ public class MainActivity extends ActionBarActivity implements android.location.
             // Set other dialog properties
             // Create the AlertDialog
 
+
+
             AlertDialog dialog = builder.create();
-            TextView tvCost = (TextView) findViewById(R.id.cancelcost);
+            final TextView tvCost = (TextView) dView.findViewById(R.id.cancelcost);
             tvCost.setText("Rs " + String.valueOf(cost));
             dialog.show();
 
+
         }else if(inRide){
-            // do nothing
+            inRide = awaitingRide = false;
+            CloseRideTask closeRide = new CloseRideTask(authenticationHeader);
+            String str_result = closeRide.execute("http://www.hoi.co.in/api/closeride/"+rideRequestId).get();
+            onCreateView();
         }
         else if(ratingPending){
             //do nothing
@@ -749,10 +1042,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
             onCreateView();
         }
         else if(inRide){
-            inRide = awaitingRide = false;
-            CloseRideTask closeRide = new CloseRideTask(authenticationHeader);
-            String str_result = closeRide.execute("http://www.hoi.co.in/api/closeride/"+rideRequestId).get();
-            onCreateView();
+
             //Todo check for rating pending for driver and co-pasengers
         }
     }
@@ -787,16 +1077,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
         mDrawerToggle.syncState();
     }
 
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // The action bar home/up action should open or close the drawer.
-        // ActionBarDrawerToggle will take care of this.
-        if (mDrawerToggle.onOptionsItemSelected(item)) {
-            return true;
-        }
 
-        return false;
-    }
 
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
@@ -1078,32 +1359,33 @@ public class MainActivity extends ActionBarActivity implements android.location.
         };
     }
 
+
     /*
      * Booking ride related methods
      */
 
     public void getCabBookingData() throws JSONException {
-        cabBookingDetails = new CabBookingDetails(cabBookinginfo.getDouble("origin_latitude"),cabBookinginfo.getDouble("origin_longitude"),
-                cabBookinginfo.getString("origin_address1"),cabBookinginfo.getString("origin_address2"),cabBookinginfo.getDouble("destination_latitude"),
-                cabBookinginfo.getDouble("destination_longitude"),cabBookinginfo.getString("destination_address1"),
-                cabBookinginfo.getString("destination_address2"));
-        cabBookingDetails.requestdatetime = cabBookinginfo.getString("requestdatetime");
+        cabBookingDetails = new CabBookingDetails(cabBookingData.getDouble("origin_latitude"),cabBookingData.getDouble("origin_longitude"),
+                cabBookingData.getString("origin_address1"),cabBookingData.getString("origin_address2"),cabBookingData.getDouble("destination_latitude"),
+                cabBookingData.getDouble("destination_longitude"),cabBookingData.getString("destination_address1"),
+                cabBookingData.getString("destination_address2"));
+        cabBookingDetails.requestdatetime = cabBookingData.getString("requestdatetime");
     }
 
     public void getCabAwaitingData() throws  JSONException{
-        JSONObject carInfo  = cabawaitinginfo.getJSONObject("carinfo");
+        JSONObject carInfo  = cabAwaitingData.getJSONObject("carinfo");
 
         CarDetail carDetails = new CarDetail(carInfo.getInt("id"),carInfo.getString("regnumber"),
                 carInfo.getString("model"), carInfo.getString("make"),carInfo.getString("color"));
 
-        rideDetails = new RideDetail(cabawaitinginfo.getDouble("ridelastlong"),cabawaitinginfo.getDouble("ridelastlat"),
-                carDetails, cabawaitinginfo.getString("drivername"), cabawaitinginfo.getString("driverpic"),cabawaitinginfo.getString("driverphone"),
-                cabawaitinginfo.getString("driverbgc"),cabawaitinginfo.getInt("occupancy"), (float) cabawaitinginfo.getDouble("billingrate"),
-                cabawaitinginfo.getInt("riderequestid"));
+        rideDetails = new RideDetail(cabAwaitingData.getDouble("ridelastlong"),cabAwaitingData.getDouble("ridelastlat"),
+                carDetails, cabAwaitingData.getString("drivername"), cabAwaitingData.getString("driverpic"),cabAwaitingData.getString("driverphone"),
+                cabAwaitingData.getString("driverbgc"),cabAwaitingData.getInt("occupancy"), (float) cabAwaitingData.getDouble("billingrate"),
+                cabAwaitingData.getInt("riderequestid"));
 
-        cabLatestCoordinate = new LatLng(cabawaitinginfo.getDouble("ridelastlat"), cabawaitinginfo.getDouble("ridelastlong"));
+        cabLatestCoordinate = new LatLng(cabAwaitingData.getDouble("ridelastlat"), cabAwaitingData.getDouble("ridelastlong"));
 
-        rideRequestId = cabawaitinginfo.getInt("riderequestid");
+        rideRequestId = cabAwaitingData.getInt("riderequestid");
     }
 
 
@@ -1117,6 +1399,48 @@ public class MainActivity extends ActionBarActivity implements android.location.
         float time =  0.0f;
         time = (float)(225.73 * Math.sqrt(Math.pow(Math.abs(slat-dlat),2)+Math.pow(Math.abs(slong-dlong),2)));
         return time;
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu items for use in the action bar
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.main, menu);
+        return super.onCreateOptionsMenu(menu);
+    }
+/*
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // The action bar home/up action should open or close the drawer.
+        // ActionBarDrawerToggle will take care of this.
+        if (mDrawerToggle.onOptionsItemSelected(item)) {
+            return true;
+        }
+
+        return false;
+    }
+*/
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Handle presses on the action bar items
+        switch (item.getItemId()) {
+            case R.id.action_search:
+
+                return true;
+            case R.id.action_settings:
+                applicationLogout();
+                return true;
+            default:
+                return super.onOptionsItemSelected(item);
+        }
+    }
+
+    private void applicationLogout(){
+        prefs.edit().remove("username");
+        prefs.edit().remove("password");
+        prefs.edit().commit();
+        super.finish();
+
     }
 
     /*
@@ -1168,19 +1492,19 @@ public class MainActivity extends ActionBarActivity implements android.location.
                 String json = "";
 
                 // 3. build jsonObject
-                cabBookinginfo = new JSONObject();
-                cabBookinginfo.accumulate("origin_latitude", cabBookingDetails.origin_latitude);
-                cabBookinginfo.accumulate("origin_longitude", cabBookingDetails.origin_longitude);
-                cabBookinginfo.accumulate("origin_address1", cabBookingDetails.origin_address1);
-                cabBookinginfo.accumulate("origin_address2", cabBookingDetails.origin_address2);
-                cabBookinginfo.accumulate("destination_latitude", cabBookingDetails.destination_latitude);
-                cabBookinginfo.accumulate("destination_longitude", cabBookingDetails.destination_longitude);
-                cabBookinginfo.accumulate("destination_address1", cabBookingDetails.destination_address1);
-                cabBookinginfo.accumulate("destination_address2", cabBookingDetails.destination_address2);
-                cabBookinginfo.accumulate("requestdatetime", cabBookingDetails.requestdatetime);
+                cabBookingData = new JSONObject();
+                cabBookingData.accumulate("origin_latitude", cabBookingDetails.origin_latitude);
+                cabBookingData.accumulate("origin_longitude", cabBookingDetails.origin_longitude);
+                cabBookingData.accumulate("origin_address1", cabBookingDetails.origin_address1);
+                cabBookingData.accumulate("origin_address2", cabBookingDetails.origin_address2);
+                cabBookingData.accumulate("destination_latitude", cabBookingDetails.destination_latitude);
+                cabBookingData.accumulate("destination_longitude", cabBookingDetails.destination_longitude);
+                cabBookingData.accumulate("destination_address1", cabBookingDetails.destination_address1);
+                cabBookingData.accumulate("destination_address2", cabBookingDetails.destination_address2);
+                cabBookingData.accumulate("requestdatetime", cabBookingDetails.requestdatetime);
 
                 // 4. convert JSONObject to JSON to String
-                json = cabBookinginfo.toString();
+                json = cabBookingData.toString();
 
                 // 5. set json to StringEntity
 
@@ -1237,7 +1561,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
             if (data != null) {
 
                 try {
-                    cabawaitinginfo = new JSONObject(data);
+                    cabAwaitingData = new JSONObject(data);
                     getCabAwaitingData();
 
                 } catch (JSONException e) {

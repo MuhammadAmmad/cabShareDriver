@@ -16,7 +16,6 @@ import android.os.Bundle;
 import android.provider.ContactsContract;
 import android.text.TextUtils;
 import android.util.Base64;
-import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -37,6 +36,7 @@ import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.message.BasicNameValuePair;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -48,7 +48,6 @@ import java.security.InvalidKeyException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 
 import javax.crypto.BadPaddingException;
@@ -84,7 +83,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        prefs= ObscuredSharedPreferences.getPrefs(this, "Hoi Cabs", Context.MODE_PRIVATE);
+        prefs = ObscuredSharedPreferences.getPrefs(this, "Hoi Cabs", Context.MODE_PRIVATE);
 
         autoLogin();
         setContentView(R.layout.activity_login);
@@ -115,7 +114,6 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
     }
 
 
-
     /**
      * Attempts to sign in or register the account specified by the login form.
      * If there are form errors (invalid email, missing fields, etc.), the
@@ -126,8 +124,8 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
             return;
         }
 
-        prefs.edit().putString("username",null).commit();
-        prefs.edit().putString("password",null).commit();
+        prefs.edit().putString("username", null).commit();
+        prefs.edit().putString("password", null).commit();
         // Reset errors.
         mEmailView.setError(null);
         mPasswordView.setError(null);
@@ -177,12 +175,12 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
         }
 
         // Store values at the time of the login attempt.
-        String email = prefs.getString("username",null);
-        String password = prefs.getString("password",null);
+        String email = prefs.getString("username", null);
+        String password = prefs.getString("password", null);
 
 
-        if(email!=null && password!=null ){
-            if( isEmailValid(email) && isPasswordValid(password)){
+        if (email != null && password != null) {
+            if (isEmailValid(email) && isPasswordValid(password)) {
                 mAuthTask = new UserLoginTask(email, password);
                 mAuthTask.execute((Void) null);
 
@@ -269,6 +267,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
         private final String mEmail;
         private final String mPassword;
         private HttpResponse response;
+        JSONObject jObject;
         ProgressDialog asyncDialog = new ProgressDialog(LoginActivity.this);
 
         UserLoginTask(String email, String password) {
@@ -305,7 +304,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
                 String credentials = mEmail + ":" + mPassword;
                 String base64EncodedCredentials = authenticationHeader = Base64.encodeToString(credentials.getBytes(), Base64.NO_WRAP);
                 request.addHeader("Authorization", "Basic " + base64EncodedCredentials);
-                request.addHeader("androidkey",encrptedkey);
+                request.addHeader("androidkey", encrptedkey);
 
 
                 List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>(1);
@@ -339,17 +338,18 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
 
                 System.out.println("ch5");
                 String line = null;
-                while ((line = reader.readLine()) != null)
-                {
+                while ((line = reader.readLine()) != null) {
                     sb.append(line + "\n");
                 }
                 result = sb.toString();
             } catch (Exception e) {
                 // Oops
-            }
-            finally {
+            } finally {
                 System.out.println(result);
-                try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
+                try {
+                    if (inputStream != null) inputStream.close();
+                } catch (Exception squish) {
+                }
             }
 
             return result;
@@ -361,13 +361,53 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
 
 
             if (data != null) {
+                try {
+                    jObject = new JSONObject(data);
+                    if (jObject.getInt("code") == 1) {
+                        prefs.edit().putString("username", mEmail).commit();
+                        prefs.edit().putString("password", mPassword).commit();
 
-                ParserTask userDataParserTask = new ParserTask(mEmail, mPassword);
-                userDataParserTask.execute(data);
+                        Intent intent = new Intent(LoginActivity.this, MainActivity.class);
+                        intent.putExtra("userData", data);
+                        intent.putExtra("authenticationHeader", authenticationHeader);
+                        asyncDialog.dismiss();
+
+                        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        getApplicationContext().startActivity(intent);
+
+
+                    } else if ((jObject.getInt("code") == 5)) {
+
+                        asyncDialog.dismiss();
+                        new AlertDialog.Builder(LoginActivity.this)
+                                .setTitle("Time Mismatch")
+                                .setCancelable(false)
+                                .setMessage("Please check your time is accurate!")
+                                .setPositiveButton("Change DateTime", new DialogInterface.OnClickListener() {
+                                    public void onClick(DialogInterface dialog, int which) {
+                                        startActivity(new Intent(android.provider.Settings.ACTION_DATE_SETTINGS));
+                                    }
+                                })
+                                .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                                    public void onClick(DialogInterface dialog, int which) {
+                                        // do nothing
+                                    }
+                                })
+                                .setIcon(android.R.drawable.ic_dialog_alert)
+                                .show();
+                    } else {
+                        asyncDialog.dismiss();
+                        mPasswordView.setError(getString(R.string.error_incorrect_password));
+                        mPasswordView.requestFocus();
+                    }
+
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
                 asyncDialog.dismiss();
 
             } else {
-                if(!mPasswordView.getText().toString().isEmpty()) {
+                if (!mPasswordView.getText().toString().isEmpty()) {
                     asyncDialog.dismiss();
                     mPasswordView.setError(getString(R.string.error_incorrect_password));
                     mPasswordView.requestFocus();
@@ -392,91 +432,4 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
             mAuthTask = null;
         }
     }
-
-    /** A class to parse the Google Places in JSON format */
-    private class ParserTask extends AsyncTask<String, Integer, HashMap<String,String>>{
-
-        private final String mEmail;
-        private final String mPassword;
-
-        public ParserTask(String email, String password){
-            mEmail = email;
-            mPassword = password;
-        }
-
-        @Override
-        protected HashMap<String, String> doInBackground(String... jsonData) {
-
-            JSONObject jObject;
-            HashMap<String, String> list = null;
-
-            try{
-                jObject = new JSONObject(jsonData[0]);
-                UserDataParser userDataParser = new UserDataParser();
-                // Getting the parsed data as a List construct
-                list = userDataParser.parse(jObject);
-            }catch(Exception e){
-                Log.d("Exception", e.toString());
-            }
-            return list;
-        }
-
-        @Override
-        protected void onPostExecute(HashMap<String, String> result) {
-
-           //System.out.println(result.get("code"));
-           if(result == null){
-
-           }
-           else{
-               if(result.get("code").equals(new String("1"))){
-
-                   prefs.edit().putString("username",mEmail).commit();
-                   prefs.edit().putString("password",mPassword).commit();
-
-                   Intent intent=new Intent(LoginActivity.this, MainActivity.class);
-                   intent.putExtra("username", result.get("username"));
-                   intent.putExtra("name", result.get("name"));
-                   intent.putExtra("phone", result.get("phone"));
-                   intent.putExtra("displaypic", result.get("displaypic"));
-                   intent.putExtra("availableinr", result.get("availableinr"));
-                   intent.putExtra("hastorateprevious", Boolean.parseBoolean(result.get("hastorateprevious")));
-                   intent.putExtra("inaride", Boolean.parseBoolean(result.get("inaride")));
-                   intent.putExtra("awaitingride", Boolean.parseBoolean(result.get("awaitingride")));
-                   intent.putExtra("genriderequestid", Integer.parseInt(result.get("genriderequestid")));
-                   intent.putExtra("authenticationHeader",authenticationHeader);
-
-                   intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                   getApplicationContext().startActivity(intent);
-
-               }else if(result.get("code").equals(new String("5"))){
-
-                   new AlertDialog.Builder(LoginActivity.this)
-                           .setTitle("Time Mismatch")
-                           .setCancelable(false)
-                           .setMessage("Please check your time is accurate!")
-                           .setPositiveButton("Change DateTime", new DialogInterface.OnClickListener() {
-                               public void onClick(DialogInterface dialog, int which) {
-                                   startActivity(new Intent(android.provider.Settings.ACTION_DATE_SETTINGS));
-                               }
-                           })
-                           .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-                               public void onClick(DialogInterface dialog, int which) {
-                                   // do nothing
-                               }
-                           })
-                           .setIcon(android.R.drawable.ic_dialog_alert)
-                           .show();
-               }else{
-
-               }
-           }
-
-        //Todo after getting the name value pairs of user
-        }
-    }
-
 }
-
-
-

@@ -2,6 +2,8 @@ package in.co.hoi.cabshare;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.location.Address;
+import android.location.Geocoder;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.text.Editable;
@@ -17,6 +19,7 @@ import android.widget.Toast;
 
 import com.google.android.gms.maps.model.LatLng;
 
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -28,6 +31,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 
 public class SearchActivity extends Activity {
 
@@ -125,7 +129,51 @@ public class SearchActivity extends Activity {
     }
 
     private void populateSavedPlaces(){
-        savedPlaces.add(new SavedPlaceItem(28.5549, 77.0842 ,"Indira Gandhi International Airport", "New Delhi"));
+        if (l.contentEquals("S")) {
+            savedPlaces.add(new SavedPlaceItem(currentCoordinate.latitude, currentCoordinate.longitude, "Current Location",
+                    getAddress(currentCoordinate.latitude, currentCoordinate.longitude)));
+        }
+        savedPlaces.add(new SavedPlaceItem(28.5549, 77.0842 , "Airport", "Indira Gandhi International Airport, New Delhi"));
+
+        String[] str = {"Home", "Office", "Favorite1", "Favorite2", "Favorite3"};
+            JSONObject jsonObject;
+            for(int i = 0 ; i < 5 ; i ++){
+                    try{
+                        if(getIntent().hasExtra(str[i])) {
+                            jsonObject = new JSONObject(getIntent().getStringExtra(str[i]));
+                            if (jsonObject != null) {
+                                savedPlaces.add(new SavedPlaceItem(jsonObject.getDouble("latitude"), jsonObject.getDouble("longitude"),
+                                        str[i], jsonObject.getString("address")));
+                            }
+                        }
+                    }catch (JSONException e){
+                    }
+                }
+
+
+    }
+
+    public String getAddress(double latitude, double longitude){
+        Geocoder geocoder = new Geocoder(this, Locale.getDefault());
+
+        String address = new String();
+        List<Address> addresses = null;
+        try {
+            addresses = geocoder.getFromLocation(latitude,longitude,1); // Here 1 represent max location result to returned, by documents it recommended 1 to 5
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        if(addresses != null){
+
+            if(addresses.get(0).getAddressLine(0) != null) address = addresses.get(0).getAddressLine(0);
+            if(addresses.get(0).getLocality() != null) address = address +", "+ addresses.get(0).getLocality();
+            if(addresses.get(0).getAdminArea() != null) address = address +", "+ addresses.get(0).getAdminArea();
+            //if(addresses.get(0).getPostalCode() != null) address = address +", "+ addresses.get(0).getPostalCode();
+            return address;
+        }
+
+        return new String("Address could not be found");
     }
 
     public void sendMessage(View view)
@@ -154,11 +202,9 @@ public class SearchActivity extends Activity {
     public void onItemClick(int mPosition)
     {
         SavedPlaceItem tempValues = (SavedPlaceItem) savedPlaces.get(mPosition);
-        locationToSearch.setText(tempValues.getAddress1()+", "+tempValues.getAddress2());
+        locationToSearch.setText(tempValues.getAddress2());
         locationCoordinate = new LatLng(tempValues.getCoordinates().latitude, tempValues.getCoordinates().longitude);
         // SHOW ALERT
-
-
     }
 
     private String getAutoCompleteUrl(String place){

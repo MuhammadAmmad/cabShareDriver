@@ -1,8 +1,6 @@
 package in.co.hoi.cabshare;
 
-import android.app.Activity;
 import android.content.Context;
-import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
@@ -12,6 +10,7 @@ import android.widget.TextView;
 import java.util.List;
 
 public class CustomDrawerAdapter extends ArrayAdapter<DrawerItem> {
+
 
     Context context;
     List<DrawerItem> drawerItemList;
@@ -32,6 +31,7 @@ public class CustomDrawerAdapter extends ArrayAdapter<DrawerItem> {
 
         DrawerItemHolder drawerHolder;
         View view = convertView;
+        /*
 
         if (view == null) {
             LayoutInflater inflater = ((Activity) context).getLayoutInflater();
@@ -47,13 +47,14 @@ public class CustomDrawerAdapter extends ArrayAdapter<DrawerItem> {
         } else {
             drawerHolder = (DrawerItemHolder) view.getTag();
 
+
         }
 
         DrawerItem dItem = (DrawerItem) this.drawerItemList.get(position);
 
         drawerHolder.icon.setImageDrawable(view.getResources().getDrawable(
                 dItem.getImgResID()));
-        drawerHolder.ItemName.setText(dItem.getItemName());
+        drawerHolder.ItemName.setText(dItem.getItemName());*/
 
         return view;
     }
@@ -62,4 +63,5 @@ public class CustomDrawerAdapter extends ArrayAdapter<DrawerItem> {
         TextView ItemName;
         ImageView icon;
     }
+
 }
