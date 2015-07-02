@@ -16,6 +16,7 @@ import android.location.Criteria;
 import android.location.Geocoder;
 import android.location.Location;
 import android.location.LocationManager;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
@@ -340,7 +341,9 @@ public class MainActivity extends ActionBarActivity implements android.location.
         switch (childPosition){
             case 0: //Todo show the user profile
                     break;
-            case 1: setMapFragment();
+            case 1: //Todo check for connectivity for Google map api
+                    if(!checkForConnectivity()) onStop();
+                    setMapFragment();
                     if(inRide)
                         setStateInRide();
                     else if(awaitingRide)
@@ -350,25 +353,16 @@ public class MainActivity extends ActionBarActivity implements android.location.
                     break;
             case 2: setUpWallet();
                     break;
-            case 3: break;
+            case 3: setUpContact();
+                    break;
             case 4: break;
             case 5: applicationLogout();
                     break;
         }
     }
 
-    private void setUpWallet(){
-        Fragment displayFragment = new FragmentWallet();
-        FragmentManager fm = getSupportFragmentManager();
 
-        Bundle args = new Bundle();
-        args.putString("authenticationheader", authenticationHeader);
-        displayFragment.setArguments(args);
 
-        fm.beginTransaction().replace(R.id.content_frame,displayFragment).commit();
-        fm.executePendingTransactions();
-        setTitle("Wallet");
-    }
 
     public void createRatingDialog(String url){
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
@@ -1154,6 +1148,58 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
     }
 
+
+
+    /*
+     * Wallet Fragment
+     */
+
+    private void setUpWallet(){
+        Fragment displayFragment = new FragmentWallet();
+        FragmentManager fm = getSupportFragmentManager();
+
+        Bundle args = new Bundle();
+        args.putString("authenticationheader", authenticationHeader);
+        displayFragment.setArguments(args);
+
+        fm.beginTransaction().replace(R.id.content_frame,displayFragment).commit();
+        fm.executePendingTransactions();
+        setTitle("Wallet");
+    }
+
+    /*
+     * Contact Fragment
+     */
+
+    public void makecall(View view) {
+        String uri = "tel:" + "00919654965311".trim();
+        Intent intent = new Intent(Intent.ACTION_DIAL);
+        intent.setData(Uri.parse(uri));
+        startActivity(intent);
+    }
+
+    public void makeemail(View view) {
+        Intent i = new Intent(Intent.ACTION_SEND);
+        i.setType("message/rfc822");
+        i.putExtra(Intent.EXTRA_EMAIL, new String[]{"support@hoi.co.in"});
+        i.putExtra(Intent.EXTRA_SUBJECT, "reg: Hoi Cabs");
+
+        try {
+            startActivity(Intent.createChooser(i, "Send mail..."));
+        } catch (android.content.ActivityNotFoundException ex) {
+            Toast.makeText(this, "There are no email clients installed.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void setUpContact() {
+        Fragment displayFragment = new FragmentContact();
+        FragmentManager fm = getSupportFragmentManager();
+
+        fm.beginTransaction().replace(R.id.content_frame,displayFragment).commit();
+        fm.executePendingTransactions();
+        setTitle("Contact Us");
+    }
+
     /*
      * Represents an asynchronous cab booking task used to authenticate
      * the ride.
@@ -1853,7 +1899,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
         @Override
         protected void onPostExecute(final String data) {
-        JSONObject jObject;
+            JSONObject jObject;
 
             if (data != null) {
 
@@ -2103,7 +2149,6 @@ public class MainActivity extends ActionBarActivity implements android.location.
             bmImage.setImageBitmap(result);
         }
     }
-
 }
 
 
