@@ -11,196 +11,32 @@
         android:id="@+id/content_frame"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
-    <RelativeLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:paddingTop="@dimen/activity_vertical_margin"
-        tools:context=".MainActivity"
-        android:background="#ffffffff">
 
-    <fragment
-        xmlns:android="http://schemas.android.com/apk/res/android"
-        android:id="@+id/map"
-        android:name="com.google.android.gms.maps.MapFragment"
-        class="com.google.android.gms.maps.SupportMapFragment"
-        android:layout_gravity="center"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_alignParentTop="true"
-        android:layout_alignParentLeft="true"
-        android:layout_alignParentStart="true"
-        android:layout_alignParentBottom="true"
-        android:layout_alignParentRight="true"
-        android:layout_alignParentEnd="true" />
-
-        <Button android:id="@+id/book_ride_button" style="?android:textAppearanceSmall"
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_gravity="bottom"
-            android:onClick="confirmRide"
-            android:text="@string/Book"
-            android:textStyle="bold"
-
-            android:background="@drawable/button_selector"
-            android:paddingLeft="@dimen/activity_horizontal_margin"
-            android:paddingRight="@dimen/activity_horizontal_margin"
-            android:layout_alignParentBottom="true"
-            android:layout_alignParentLeft="true"
-            android:layout_alignParentStart="true" />
-
-        <Button android:id="@+id/start_ride_button" style="?android:textAppearanceSmall"
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_gravity="bottom"
-            android:onClick="startRide"
-            android:paddingBottom="@dimen/activity_vertical_margin"
-            android:text="@string/Start"
-            android:paddingLeft="@dimen/activity_horizontal_margin"
-            android:paddingRight="@dimen/activity_horizontal_margin"
-            android:textStyle="bold"
-
-            android:background="@drawable/button_selector"
-            android:layout_above="@+id/horizontalScrollView"
-            android:layout_alignParentLeft="true"
-            android:layout_alignParentStart="true" />
-
-
-
-        <TableLayout
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:layout_alignParentTop="true"
+        <fragment
+            xmlns:android="http://schemas.android.com/apk/res/android"
+            android:id="@+id/map"
+            android:name="com.google.android.gms.maps.MapFragment"
+            class="com.google.android.gms.maps.SupportMapFragment"
+            android:layout_gravity="center"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
             android:layout_alignParentLeft="true"
             android:layout_alignParentStart="true"
-            android:stretchColumns="2"
-            android:id="@+id/tableLayout"
-            android:dividerPadding="@dimen/abc_action_bar_default_padding_material">
-
-
-        <TableRow
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:layout_weight="1">
-            <Button
-                android:layout_width="0dp"
-                android:textAppearance="?android:attr/textAppearanceLarge"
-                android:maxLength="35"
-                android:layout_column="1"
-                android:layout_weight="0.6"
-                android:textStyle="bold"
-                android:layout_height="wrap_content"
-                android:text="Set PickUp Point"
-                android:id="@+id/search_source_button"
-                android:layout_alignTop="@+id/map"
-                android:background="@drawable/search_button_selector"
-                android:layout_alignParentLeft="true"
-                android:paddingLeft="@dimen/activity_horizontal_margin"
-                android:paddingRight="@dimen/activity_horizontal_margin"
-                android:layout_alignParentStart="true"
-                android:onClick="sendMessageSource"
-                android:layout_alignRight="@+id/map"
-                android:layout_alignEnd="@+id/map" />
-            <ImageButton
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:clickable="true"
-                android:id="@+id/save_source"
-                android:layout_gravity="center"
-                android:layout_alignTop="@+id/map"
-                android:layout_alignParentRight="true"
-                android:paddingLeft="@dimen/activity_horizontal_margin"
-                android:paddingRight="@dimen/activity_horizontal_margin"
-                android:layout_alignRight="@+id/map"
-                android:layout_alignEnd="@+id/map"
-                android:onClick="saveSource"
-                android:src="@drawable/ic_action_favorite"
-                android:contentDescription="Save Location"
-                android:layout_column="2"
-                android:layout_weight="0.1"/>
-
-
-        </TableRow>
-
-        <TableRow
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:layout_weight="1">
-            <Button
-                android:layout_width="0dp"
-                android:textAppearance="?android:attr/textAppearanceLarge"
-                android:maxLength="35"
-                android:layout_column="1"
-                android:layout_weight="0.6"
-                android:textStyle="bold"
-                android:layout_height="wrap_content"
-                android:text="Set Drop Point"
-                android:id="@+id/search_destination_button"
-
-                android:background="@drawable/search_button_selector"
-                android:layout_below = "@+id/search_source_button"
-                android:paddingLeft="@dimen/activity_horizontal_margin"
-                android:paddingRight="@dimen/activity_horizontal_margin"
-                android:onClick="sendMessageDestination"
-                android:layout_alignRight="@+id/map"
-                android:layout_alignEnd="@+id/map" />
-            <ImageButton
-                android:layout_width="0dp"
-                android:layout_below = "@+id/save_source"
-                android:layout_height="wrap_content"
-                android:id="@+id/save_destination"
-                android:layout_gravity="center"
-                android:layout_alignParentRight="true"
-                android:paddingLeft="@dimen/activity_horizontal_margin"
-                android:paddingRight="@dimen/activity_horizontal_margin"
-                android:layout_alignRight="@+id/map"
-                android:layout_alignEnd="@+id/map"
-                android:onClick="saveDestination"
-                android:src="@drawable/ic_action_favorite"
-                android:contentDescription="Save Location"
-                android:layout_column="2"
-                android:layout_weight="0.1"/>
-
-
-        </TableRow>
-        </TableLayout>
-        <ImageButton
-            style="?android:attr/buttonStyleSmall"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:src="@drawable/ic_action_about"
-            android:id="@+id/shareCabRates"
-            android:onClick="showCabRates"
-            android:textSize="20dp"
-            android:hint="Cab Rates"
-            android:layout_above="@+id/start_ride_button"
+            android:layout_alignParentBottom="true"
             android:layout_alignParentRight="true"
-            android:layout_alignParentEnd="true" />
+            android:layout_alignParentEnd="true"
+            android:layout_alignParentTop="true" />
 
-        <HorizontalScrollView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:id="@+id/horizontalScrollView"
-            android:layout_above="@+id/book_ride_button" >
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:id="@+id/pasengerlist"
-                android:orientation="horizontal">
-            </LinearLayout>
-        </HorizontalScrollView>
-
-
-
-    </RelativeLayout>
     </FrameLayout>
     </LinearLayout>
 
-    <!-- Side navigation drawer UI -->
+        <!-- Side navigation drawer UI -->
 
     <android.support.v7.widget.RecyclerView
         android:id="@+id/RecyclerView"
-        android:layout_width="320dp"
+        android:layout_width="300dp"
         android:layout_height="match_parent"
         android:layout_gravity="left"
-
         android:background="#ffffff"
         android:scrollbars="vertical">
 

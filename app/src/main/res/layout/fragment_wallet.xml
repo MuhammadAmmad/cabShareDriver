@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical" android:layout_width="match_parent"
+    android:layout_height="match_parent" android:background="#ffffff">
+
+    <TabHost
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:id="@+id/tabHost">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <TabWidget
+                android:id="@android:id/tabs"
+                android:layout_width="match_parent"
+                android:layout_height="60dp"></TabWidget>
+
+            <FrameLayout
+                android:id="@android:id/tabcontent"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <LinearLayout
+                    android:id="@+id/wallet"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="1dp"
+                            android:background="#000000"/>
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:padding="5dp">
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="BALANCE : "
+                                style="?android:textAppearanceLarge"
+                                android:layout_weight="0.8"/>
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:id="@+id/remaining_balance"
+                                android:text="0.0"
+                                android:layout_weight="0.2"
+                                style="?android:textAppearanceLarge"/>
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="1dp"
+                            android:background="#000000"/>
+
+                    </LinearLayout>
+                        <LinearLayout
+                            android:orientation="vertical"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:padding="10dp"
+                            android:background="#00000000">
+
+                            <Button android:id="@+id/recharge_button" style="?android:textAppearanceMedium"
+                                android:layout_width="match_parent" android:layout_height="wrap_content"
+                                android:onClick="rechargeHoiAcc"
+                                android:text="@string/recharge"
+                                android:background="@drawable/button_selector" />
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="5dp"></LinearLayout>
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="ADD COUPON CODE"
+                                android:onClick="true"
+                                android:focusable="true"
+                                android:textStyle="italic"
+                                style="?android:textAppearanceSmall"/>
+                        </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/credits"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical">
+                    <ListView
+                        android:id="@+id/credits_list"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_below = "@+id/select_location"
+                        android:layout_gravity="top|start"
+                        android:background="#ffeeeeee" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/debits"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical">
+                    <ListView
+                        android:id="@+id/debits_list"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_below = "@+id/select_location"
+                        android:layout_gravity="top|start"
+                        android:background="#ffeeeeee" />
+                </LinearLayout>
+            </FrameLayout>
+        </LinearLayout>
+    </TabHost>
+</LinearLayout>

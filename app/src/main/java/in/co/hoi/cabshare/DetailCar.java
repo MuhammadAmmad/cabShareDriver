@@ -1,20 +1,19 @@
 package in.co.hoi.cabshare;
 
 import android.util.Log;
-
 import org.json.JSONObject;
 
 /**
- * Created by lenovo pc on 25-05-2015.
+ * Created by Ujjwal on 25-05-2015.
  */
-public class CarDetail {
+public class DetailCar {
     int id;
     String regNumber;
     String model;
     String make;
     String color;
 
-    public CarDetail(JSONObject carInfo){
+    public DetailCar(JSONObject carInfo){
         try {
             this.id = carInfo.getInt("id");
             this.regNumber = carInfo.getString("regnumber");
@@ -26,4 +25,5 @@ public class CarDetail {
             Log.d("Exception", "Car Details");
         }
     }
+
 }

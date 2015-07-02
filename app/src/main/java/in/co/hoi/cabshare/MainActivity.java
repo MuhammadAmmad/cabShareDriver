@@ -2,13 +2,13 @@ package in.co.hoi.cabshare;
 
 import android.app.AlertDialog;
 import android.app.Dialog;
-import android.app.Fragment;
-import android.app.FragmentManager;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.drawable.BitmapDrawable;
 import android.location.Address;
@@ -20,6 +20,8 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.v4.app.ActionBarDrawerToggle;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentManager;
 import android.support.v4.app.LoaderManager.LoaderCallbacks;
 import android.support.v4.content.CursorLoader;
 import android.support.v4.content.Loader;
@@ -29,17 +31,17 @@ import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
+import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
-import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.HorizontalScrollView;
-import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.PopupWindow;
@@ -91,35 +93,32 @@ import java.util.concurrent.ExecutionException;
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 
-import de.hdodenhof.circleimageview.CircleImageView;
-
 public class MainActivity extends ActionBarActivity implements android.location.LocationListener,GoogleMap.OnMapClickListener,LoaderCallbacks<Cursor>,GoogleMap.OnMarkerDragListener {
 
-    private static String authenticationHeader;
     /*
-     * variables for source and destination on map
+     * Constants
+     */
+    private final static int BASECHARGE = 30;
+    private static String authenticationHeader;
+    private final static String BASE_SERVER_URL = "http://www.hoi.co.in/api/";
+
+    /*
+     * Markers for Google Map
      */
 	private GoogleMap mGoogleMap;
     private Marker sourceMarker;
     private Marker destinationMarker;
     private Marker cabMarker;
-    private LatLng currentLocationCoordinate;
-    private LatLng cabLatestCoordinate;
-
 
     /*
      *   variables for navigation drawer
      */
-
     private Toolbar toolbar;                              // Declaring the Toolbar Object
-
     RecyclerView mRecyclerView;                           // Declaring RecyclerView
     RecyclerView.Adapter mAdapter;                        // Declaring Adapter For Recycler View
     RecyclerView.LayoutManager mLayoutManager;            // Declaring Layout Manager as a linear layout manager
     DrawerLayout Drawer;                                  // Declaring DrawerLayout
-
     ActionBarDrawerToggle mDrawerToggle;                  // Declaring Action Bar Drawer Toggle
-
 
     private CharSequence mDrawerTitle;
     private CharSequence mTitle;
@@ -127,46 +126,44 @@ public class MainActivity extends ActionBarActivity implements android.location.
     private ListView mDrawerList;
     private DrawerLayout mDrawerLayout;
     private String mActivityTitle;
-    private boolean checkForGPS;
 
+    private DetailCar carDetails;
+    private DetailCurrentRide currentRideDetails;
+    private DetailDriver driverDetails;
+    private DetailUser userDetails;
     private boolean inRide;
     private boolean awaitingRide;
     private boolean ratingPending;
-    ObscuredSharedPreferences prefs;
-    
-    private CabBookingDetails cabBookingDetails;
-    private  RideDetail rideDetails;
-
     private int rideRequestId;
     private int cabArrivalDuration;
     private int cabDistanceAway;
-    private final static int BASECHARGE = 30;
+    CabBookingDetails cabBookingDetails;
 
+    /*
+     * Miscellaneous variables
+     */
+    ObscuredSharedPreferences prefs;
+    private LatLng currentLocationCoordinate;
+    private LatLng cabLatestCoordinate;
     Timer timer;
     TimerTask timerTask;
+    final Handler handler = new Handler();
+    Double cabDetailsRequestTime;
+    int defaultView = 1;
+    View fragmentMainView;
+    View fragmentWalletView;
 
-    // fare related variables
-    private float cabFare = 0.0f;
+    /*
+     * Variable for fare calculation
+     */
     private float billingRate = 10f;
-    private float distanceTravelled = 0.0f;
-    private float durationTravelled = 0;
     private int stateCounter = 0;
 
-    //rating related variables
+    /*
+     * variable for user and driver rating
+     */
     private int driverRating = 0;
-    private int pass1Rating = 0;
-    private int pass2Rating = 0;
-    private int pass3Rating = 0;
-    private int pass4Rating = 0;
-
-
-
-    JSONObject cabBookingData;
-    JSONObject cabAwaitingData;
-    JSONObject userData;
-
-
-    final Handler handler = new Handler();
+    List<CoPassenger> coPassengers;
 
     //ObscuredSharedPreferences sharedPreferences;
     //public static final String HOI_OBSCURED_PREFERENCES = "Hoi Cabs" ;
@@ -184,68 +181,98 @@ public class MainActivity extends ActionBarActivity implements android.location.
 		setContentView(R.layout.activity_main);
 
         prefs= ObscuredSharedPreferences.getPrefs(this, "Hoi Cabs", Context.MODE_PRIVATE);
-        String TITLES[] = {"Home","Wallet","Contact Us","Complaint","Help"};
+        String TITLES[] = {"Home","Wallet","Contact Us","Complaint","LogOut"};
         int ICONS[] = {R.drawable.ic_home,R.drawable.ic_wallet,R.drawable.ic_contact,R.drawable.ic_comp,R.drawable.ic_favorite};
-        String NAME ="", EMAIL="", PICURL="";
 
         try {
 
-            userData = new JSONObject(getIntent().getStringExtra("userData"));
+            JSONObject userData = new JSONObject(getIntent().getStringExtra("userData"));
+            userDetails = new DetailUser(userData);
+
             inRide = userData.getBoolean("inaride");
             awaitingRide = userData.getBoolean("awaitingride");
             ratingPending = userData.getBoolean("hastorateprevious");
             rideRequestId  = userData.getInt("genriderequestid");
-            NAME = userData.getString("name");
-            EMAIL = userData.getString("username");
-            PICURL = userData.getString("displaypic");
+
             if(getIntent().hasExtra("authenticationHeader"))
                 authenticationHeader = getIntent().getStringExtra("authenticationHeader");
+
         } catch (JSONException e) {
             e.printStackTrace();
         }
 
-        //Updating the user state in applciation
-        try {
-        if(awaitingRide){
-            if(prefs.contains("CabBookingDetail")) {
-                cabBookingData = new JSONObject(prefs.getString("CabBookingDetail", null));
-                getCabBookingData();
-            }
-
-            if(prefs.contains("CabAwaitingDetail")) {
-                cabAwaitingData = new JSONObject(prefs.getString("CabAwaitingDetail", null));
-                getCabAwaitingData();
+        /*
+         * Updating the user state if user already booked the ride
+         */
+        if(inRide || awaitingRide){
+            RideRequestInfo rideRequestInfo = new RideRequestInfo();
+            try {
+                Log.d("CODE_FLOW", "CAB DETAILS_REQESTED");
+                String res = rideRequestInfo.execute("http://www.hoi.co.in/api/riderequestinfo/"+rideRequestId).get();
+                cabDetailsRequestTime = System.currentTimeMillis()/60000.0;
+                Log.d("CODE_FLOW", "CAB DETAILS_RECEIVED");
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (ExecutionException e) {
+                e.printStackTrace();
             }
         }
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-
-
-
-
-        checkForGPS = false;
 
         // Initializing Navigation Drawer
-
-
-
-
         mRecyclerView = (RecyclerView) findViewById(R.id.RecyclerView); // Assigning the RecyclerView Object to the xml View
-
         mRecyclerView.setHasFixedSize(true);                            // Letting the system know that the list objects are of fixed size
+        mAdapter = new MyAdapter(TITLES,ICONS,userDetails.name,userDetails.phone,userDetails.displayPic,getApplicationContext());       // Creating the Adapter of MyAdapter class(which we are going to see in a bit)
 
-        mAdapter = new MyAdapter(TITLES,ICONS,NAME,EMAIL,R.drawable.male_user);       // Creating the Adapter of MyAdapter class(which we are going to see in a bit)
         // And passing the titles,icons,header view name, header view email,
         // and header view profile picture
-
         mRecyclerView.setAdapter(mAdapter);                              // Setting the adapter to RecyclerView
+        final GestureDetector mGestureDetector = new GestureDetector(MainActivity.this, new GestureDetector.SimpleOnGestureListener() {
+            @Override public boolean onSingleTapUp(MotionEvent e) {
+                return true;
+            }
+        });
 
+        try {
+            drawerItemSelectedAction(defaultView);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        mRecyclerView.addOnItemTouchListener(new RecyclerView.OnItemTouchListener() {
+            @Override
+            public boolean onInterceptTouchEvent(RecyclerView recyclerView, MotionEvent motionEvent) {
+                View child = recyclerView.findChildViewUnder(motionEvent.getX(),motionEvent.getY());
+                if(child!=null && mGestureDetector.onTouchEvent(motionEvent)){
+                    Drawer.closeDrawers();
+                    try {
+                        drawerItemSelectedAction(recyclerView.getChildPosition(child));
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    } catch (ExecutionException e) {
+                        e.printStackTrace();
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                    Toast.makeText(MainActivity.this,"The Item Clicked is: "+recyclerView.getChildPosition(child),Toast.LENGTH_SHORT).show();
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public void onTouchEvent(RecyclerView recyclerView, MotionEvent motionEvent) {
+            }
+
+            @Override
+            public void onRequestDisallowInterceptTouchEvent(boolean disallowIntercept) {
+            }
+        });
         mLayoutManager = new LinearLayoutManager(this);                 // Creating a layout Manager
-
         mRecyclerView.setLayoutManager(mLayoutManager);                 // Setting the layout Manager
-
-
         Drawer = (DrawerLayout) findViewById(R.id.drawer_layout);        // Drawer object Assigned to the view
         mDrawerToggle = new ActionBarDrawerToggle(this, Drawer,
                 R.drawable.ic_drawer, R.string.drawer_open,
@@ -262,313 +289,115 @@ public class MainActivity extends ActionBarActivity implements android.location.
                 // onPrepareOptionsMenu()
             }
         };
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        getSupportActionBar().setHomeButtonEnabled(true);
 
         Drawer.setDrawerListener(mDrawerToggle); // Drawer Listener set to the Drawer toggle
         mDrawerToggle.syncState();               // Finally we set the drawer toggle sync State
 
-        /*
-        dataList = new ArrayList<DrawerItem>();
-        mTitle = mDrawerTitle = getTitle();
-        mDrawerLayout = (DrawerLayout) findViewById(R.id.drawer_layout);
-        mDrawerList = (ListView) findViewById(R.id.left_drawer);
-        mDrawerLayout.setDrawerShadow(R.drawable.drawer_shadow,
-                GravityCompat.START);
-        fillNavigationDrawer();
-        adapter = new CustomDrawerAdapter(this, R.layout.custom_drawer_item,
-                dataList);
-        mDrawerList.setAdapter(adapter);
-        mDrawerList.setOnItemClickListener(new DrawerItemClickListener());
 
-        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-        getSupportActionBar().setHomeButtonEnabled(true);
+    }
 
-        //sharedPreferences = ObscuredSharedPreferences.getPrefs(this,HOI_OBSCURED_PREFERENCES, Context.MODE_PRIVATE);
+    private boolean checkForConnectivity(){
+        int status = GooglePlayServicesUtil.isGooglePlayServicesAvailable(getBaseContext());
+        if (status != ConnectionResult.SUCCESS) { // Google Play Services are not available
+            int requestCode = 10;
+            Dialog dialog = GooglePlayServicesUtil.getErrorDialog(status, this, requestCode);
+            dialog.show();
+            Log.d("Connectivity", "Failed");
+            return false;
+        }
+        return true;
+    }
 
-
-
-        mDrawerLayout.setDrawerListener(mDrawerToggle);
-
-
-        if (savedInstanceState == null) {
-            SelectItem(0);
-        }*/
-
+    private void setMapFragment(){
         LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        SupportMapFragment fragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
+        mGoogleMap = fragment.getMap();
+        mGoogleMap.setOnMarkerDragListener(this);
+        mGoogleMap.setOnMapClickListener(this);
+        mGoogleMap.setMyLocationEnabled(false);
 
-        if(!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+        // Creating a criteria object to retrieve provider
+        Criteria criteria = new Criteria();
 
-            checkForGPS = true;
-            System.out.println("GPS not enabled");
-            Intent callGPSSettingIntent = new Intent(
-                    android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS);
-            startActivity(callGPSSettingIntent);
-            onPause();
-        }
-        else {
+        // Getting the name of the best provider
+        String provider = locationManager.getBestProvider(criteria, true);
 
-            // Getting LocationManager object from System Service LOCATION_SERVICE
-            //LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        // Getting Current Location
+        Location location = getLastKnownLocation(locationManager);
 
-            int status = GooglePlayServicesUtil.isGooglePlayServicesAvailable(getBaseContext());
-
-            if (status != ConnectionResult.SUCCESS) { // Google Play Services are not available
-
-                int requestCode = 10;
-                Dialog dialog = GooglePlayServicesUtil.getErrorDialog(status, this, requestCode);
-                dialog.show();
-                System.out.println("check:Connectionfail");
-
-            } else { // Google Play Services are available
-
-                SupportMapFragment fragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
-                mGoogleMap = fragment.getMap();
-                mGoogleMap.setOnMarkerDragListener(this);
-                mGoogleMap.setOnMapClickListener(this);
-                System.out.println("check:Check1");
-                mGoogleMap.setMyLocationEnabled(false);
-
-                System.out.println("check:Check2");
-
-
-                // Creating a criteria object to retrieve provider
-                Criteria criteria = new Criteria();
-
-                System.out.println("check:Check3");
-                // Getting the name of the best provider
-
-                String provider = locationManager.getBestProvider(criteria, true);
-
-                System.out.println("check:Check4");
-                // Getting Current Location
-                Location location = getLastKnownLocation(locationManager);
-
-                if (location != null) {
-                    currentLocationCoordinate = new LatLng(location.getLatitude(), location.getLongitude());
-                    onLocationChanged(location);
-
-                }
-                System.out.println("check:Check6");
-                locationManager.requestLocationUpdates(provider, 20000, 0, this);
-
-                //Creating view depending on the status of the user
-
-
-                try {
-                    onCreateView();
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-        getIntent().setAction("Already created");
-        }
-
-    private void addHorizontalScrollView(){
-
-        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(220, 220);
-        de.hdodenhof.circleimageview.CircleImageView c1 = new CircleImageView(getApplicationContext());
-        c1.setLayoutParams(layoutParams);
-        c1.setImageResource(R.drawable.male_user);
-        c1.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                createRatingDialog();
-            }
-        });
-
-
-        de.hdodenhof.circleimageview.CircleImageView c2 = new CircleImageView(getApplicationContext());
-        c2.setLayoutParams(layoutParams);
-        c2.setImageResource(R.drawable.male_user);
-        c2.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                createRatingDialog();
-            }
-        });
-
-        de.hdodenhof.circleimageview.CircleImageView c3 = new CircleImageView(getApplicationContext());
-        c3.setLayoutParams(layoutParams);
-        c3.setImageResource(R.drawable.male_user);
-        c3.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                createRatingDialog();
-            }
-        });
-
-        de.hdodenhof.circleimageview.CircleImageView c4 = new CircleImageView(getApplicationContext());
-        c4.setLayoutParams(layoutParams);
-        c4.setImageResource(R.drawable.male_user);
-        c4.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                createRatingDialog();
-            }
-        });
-
-        de.hdodenhof.circleimageview.CircleImageView cUnknown = new CircleImageView(getApplicationContext());
-        cUnknown.setLayoutParams(layoutParams);
-        cUnknown.setImageResource(R.drawable.male_user);
-        cUnknown.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                createRatingDialog();
-            }
-        });
-        LinearLayout hv = (LinearLayout) findViewById(R.id.pasengerlist);
-
-
-        hv.addView(c1);
-        hv.addView(c2);
-        hv.addView(c3);
-        hv.addView(c4);
-        hv.addView(cUnknown);
-    }
-
-    private void removeHorizontalScrollView(){
-        HorizontalScrollView hv = (HorizontalScrollView) findViewById(R.id.horizontalScrollView);
-        hv.removeAllViews();
-    }
-
-    private void createRatingDialog(){
-
-    }
-
-    private void onCreateView () throws JSONException {
-        System.out.println("Creating View depending on status");
-        LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
-        ImageButton bi = (ImageButton)findViewById(R.id.shareCabRates);
-        Button b1 = (Button) findViewById(R.id.search_source_button);
-        Button b2 = (Button) findViewById(R.id.search_destination_button);
-        Button b3 = (Button) findViewById(R.id.book_ride_button);
-        Button b4 = (Button) findViewById(R.id.start_ride_button);
-        ImageButton iBsrc = (ImageButton)findViewById(R.id.save_source);
-        ImageButton iBdst = (ImageButton)findViewById(R.id.save_destination);
-
-
-
-
-        /*
-            Create view for user when he is waiting for his/her ride
-         */
-        if(awaitingRide){
-            b1.setVisibility(View.VISIBLE);
-            b2.setVisibility(View.INVISIBLE);
-            b3.setVisibility(View.VISIBLE);
-            b4.setVisibility(View.VISIBLE);
-            bi.setVisibility(View.INVISIBLE);
-            iBsrc.setVisibility(View.INVISIBLE);
-            iBdst.setVisibility(View.INVISIBLE);
-
-            b1.setText("Track Your Ride");
-            b3.setText("Cancel Cab");
-            b4.setText("Start Ride");
-            setTitle("Awaiting Ride");
-
-            if(sourceMarker!= null) sourceMarker.remove();
-            if(destinationMarker!= null) destinationMarker.remove();
-
-            startTimer();
-
-        }
-        /*
-            View for user when he is in ride
-         */
-        else if(inRide){
-
-            bi.setVisibility(View.INVISIBLE);
-            b1.setVisibility(View.INVISIBLE);
-            b2.setVisibility(View.INVISIBLE);
-            b3.setVisibility(View.VISIBLE);
-            b4.setVisibility(View.INVISIBLE);
-            iBsrc.setVisibility(View.INVISIBLE);
-            iBdst.setVisibility(View.VISIBLE);
-            addHorizontalScrollView();
-
-
-
-            b3.setText("End Ride");
-            setTitle("In Ride");
-
-            mGoogleMap.setMyLocationEnabled(true);
-
-            // Creating a criteria object to retrieve provider
-            Criteria criteria = new Criteria();
-
-            System.out.println("check:Check3");
-            // Getting the name of the best provider
-
-            String provider = locationManager.getBestProvider(criteria, true);
-
-            Location location = getLastKnownLocation(locationManager);
-
+        if (location != null) {
             currentLocationCoordinate = new LatLng(location.getLatitude(), location.getLongitude());
-            locationManager.requestLocationUpdates(provider, 20000, 0, this);
-
-            CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(currentLocationCoordinate, 15);
-            mGoogleMap.animateCamera(yourLocation);
-
+            onLocationChanged(location);
         }
-        /*
-            View for user when he has not rated previous co-Passenger
-         */
-        else if(ratingPending){
+        locationManager.requestLocationUpdates(provider, 20000, 0, this);
+    }
 
-            setTitle("Rating");
-            bi.setVisibility(View.INVISIBLE);
-            b1.setVisibility(View.INVISIBLE);
-            b2.setVisibility(View.INVISIBLE);
-            b3.setVisibility(View.INVISIBLE);
-            b4.setVisibility(View.INVISIBLE);
-            iBsrc.setVisibility(View.INVISIBLE);
-            iBdst.setVisibility(View.INVISIBLE);
-            //b2.setVisibility(View.VISIBLE);
-            //b1.setText("Set PickUp Loaction");
+    private void drawerItemSelectedAction(int childPosition) throws InterruptedException, ExecutionException, JSONException {
+
+        String barTitle = "";
+        switch (childPosition){
+            case 0: //Todo show the user profile
+                    break;
+            case 1: setMapFragment();
+                    if(inRide)
+                        setStateInRide();
+                    else if(awaitingRide)
+                        setStateAwaitingRide();
+                    else
+                        setStateBookRide();
+                    break;
+            case 2: setUpWallet();
+                    break;
+            case 3: break;
+            case 4: break;
+            case 5: applicationLogout();
+                    break;
         }
-        /*
-            View for user when he is booking ride
-         */
-        else{
-            bi.setVisibility(View.VISIBLE);
-            b1.setVisibility(View.VISIBLE);
-            b2.setVisibility(View.VISIBLE);
-            b3.setVisibility(View.VISIBLE);
-            iBsrc.setVisibility(View.VISIBLE);
-            iBdst.setVisibility(View.VISIBLE);
-            b4.setVisibility(View.INVISIBLE);
-            b1.setText("Set PickUp Location");
-            b2.setText("Set Drop Location");
-            b3.setText("Book Cab");
+    }
 
-            setTitle("Book Cab");
-            removeHorizontalScrollView();
-            mGoogleMap.setMyLocationEnabled(false);
-            if(currentLocationCoordinate == null){
+    private void setUpWallet(){
+        Fragment displayFragment = new FragmentWallet();
+        FragmentManager fm = getSupportFragmentManager();
 
+        Bundle args = new Bundle();
+        args.putString("authenticationheader", authenticationHeader);
+        displayFragment.setArguments(args);
 
-                // Creating a criteria object to retrieve provider
-                Criteria criteria = new Criteria();
+        fm.beginTransaction().replace(R.id.content_frame,displayFragment).commit();
+        fm.executePendingTransactions();
+        setTitle("Wallet");
+    }
 
-                System.out.println("check:Check3");
-                // Getting the name of the best provider
+    public void createRatingDialog(String url){
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
 
-                String provider = locationManager.getBestProvider(criteria, true);
+        // Get the layout inflater
+        LayoutInflater inflater = this.getLayoutInflater();
+        View dView = inflater.inflate(R.layout.rating_dialog, null);
+        // Add the buttons
 
-                Location location = getLastKnownLocation(locationManager);
-
-                currentLocationCoordinate = new LatLng(location.getLatitude(), location.getLongitude());
-
-            }
-
-            IconGenerator iconFactory = new IconGenerator(this);
-            iconFactory.setColor(Color.GREEN);
-            sourceMarker = addIcon(iconFactory, "PickUp", new LatLng(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude));
-            sourceMarker.isDraggable();
-
-            CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(currentLocationCoordinate, 16);
-            mGoogleMap.animateCamera(yourLocation);
-        }
+        builder.setView(dView)
+                // Add action buttons
+                .setPositiveButton(R.string.submit, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int id) {
+                        // todo when user rates another user
+                    }
+                })
+                .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        //nothing to be done when user cancels his action
+                    }
+                });
+        // Set other dialog properties
+        // Create the AlertDialog
+        AlertDialog dialog = builder.create();
+        de.hdodenhof.circleimageview.CircleImageView pic = (de.hdodenhof.circleimageview.CircleImageView)
+                dView.findViewById(R.id.co_passenger_dp);
+        new DownloadImageTask(pic).execute(url).execute();
+        dialog.show();
     }
 
     @Override
@@ -577,6 +406,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
     }
 
     public void saveSource(View view){
+
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         final Double lat = sourceMarker.getPosition().latitude;
         final Double lon = sourceMarker.getPosition().longitude;
@@ -630,9 +460,6 @@ public class MainActivity extends ActionBarActivity implements android.location.
         dialog.show();
 
     }
-
-
-
 
     public void saveDestination(View view){
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
@@ -691,36 +518,12 @@ public class MainActivity extends ActionBarActivity implements android.location.
         dialog.show();
     }
 
-
-    /*
-     * Button press method call
-     */
-    @Override
-    public void onResume(){
-        if(checkForGPS == true) {
-            checkForGPS = false;
-            String action = getIntent().getAction();
-            // Prevent endless loop by adding a unique action, don't restart if action is present
-            if (action == null || !action.equals("Already created")) {
-
-                Intent intent = new Intent(this, MainActivity.class);
-                startActivity(intent);
-                finish();
-            }
-            // Remove the unique action so the next time onResume is called it will restart
-            else
-                getIntent().setAction(null);
-        }
-        super.onResume();
-    }
-
     @Override
     protected void onStop() {
         super.onStop();
     }
 
     public void showCabRates(View view){
-        System.out.println("popshow");
 
         // Inflate the popup_layout.xml
         LinearLayout viewGroup = (LinearLayout) this.findViewById(R.id.popup);
@@ -729,8 +532,6 @@ public class MainActivity extends ActionBarActivity implements android.location.
         View layout = layoutInflater.inflate(R.layout.popup_layout, viewGroup);
 
         layout.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
-
-
 
         // Creating the PopupWindow
         final PopupWindow popup = new PopupWindow(this);
@@ -856,213 +657,253 @@ public class MainActivity extends ActionBarActivity implements android.location.
         }
     }
 
-    public void confirmRide(View view) throws ExecutionException, InterruptedException, JSONException {
+    private void setStateAwaitingRide(){
 
-        if(awaitingRide){
-            float cost = 100.0f;
-            SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
-            String currentDateandTime = sdf.format(new Date());
-            int minutes = 0, hours = 0;
+        SupportMapFragment fragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
+        mGoogleMap = fragment.getMap();
+        mGoogleMap.setOnMarkerDragListener(this);
+        mGoogleMap.setOnMapClickListener(this);
+        mGoogleMap.setMyLocationEnabled(false);
 
-            if(cabBookingDetails != null) {
-                minutes = Integer.parseInt(currentDateandTime.substring(14)) -
-                        Integer.parseInt(cabBookingDetails.requestdatetime.substring(14));
+        awaitingRide = true;
+        inRide = false;
+        ratingPending = false;
 
-                hours = Integer.parseInt(currentDateandTime.substring(11, 12)) -
-                        Integer.parseInt(cabBookingDetails.requestdatetime.substring(11, 12));
-            }
+        Fragment displayFragment = new FragmentMain();
+        FragmentManager fm = getSupportFragmentManager();
 
-            DistanceDurationInfo getDistDurInfoTask = new DistanceDurationInfo(new LatLng(cabBookingDetails.origin_latitude,
-                    cabBookingDetails.origin_longitude),cabLatestCoordinate);
-            float[] distdurInfo = getDistDurInfoTask.googleDistanceDurationInfo();
+        Bundle args = new Bundle();
+        args.putBoolean("awaitingride", awaitingRide);
+        args.putBoolean("inRide", inRide);
+        args.putBoolean("ratindpending", ratingPending);
 
-            if(hours == 0 && minutes > 0 && minutes < 5){
-                cost = 0;
-            }
+        displayFragment.setArguments(args);
 
-            else if(distdurInfo[1] < 10){
-                cost = 100;
-            }
+        fm.beginTransaction().replace(R.id.content_frame,displayFragment).commit();
+        fm.executePendingTransactions();
+        setTitle("Awaiting Ride");
 
-            else
-                cost = BASECHARGE;
+        initializeTimerTask();
+        startTimer();
+    }
+
+    private void setStateInRide() throws ExecutionException, InterruptedException {
+        LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+
+        stoptimertask();
+        cabMarker.remove();
+
+        awaitingRide = false;
+        inRide = true;
+        ratingPending = false;
+
+        SupportMapFragment fragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
+        mGoogleMap = fragment.getMap();
+        mGoogleMap.setOnMarkerDragListener(this);
+        mGoogleMap.setOnMapClickListener(this);
+        mGoogleMap.setMyLocationEnabled(true);
+
+        // Creating a criteria object to retrieve provider
+        Criteria criteria = new Criteria();
+
+        // Getting the name of the best provider
+        String provider = locationManager.getBestProvider(criteria, true);
+
+        // Getting Current Location
+        Location location = getLastKnownLocation(locationManager);
+
+        if (location != null) {
+            currentLocationCoordinate = new LatLng(location.getLatitude(), location.getLongitude());
+            locationManager.requestLocationUpdates(provider, 20000, 0, this);
+            CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(currentLocationCoordinate, 15);
+            mGoogleMap.animateCamera(yourLocation);
+        }
+
+        //Getting copassenger details
+        CoPassengerInfo coPassengerInfoTask = new CoPassengerInfo();
+
+        Log.d("CODE_FLOW", "REQUEST FOR CO PASSENGER INFO");
+        String res = coPassengerInfoTask.execute(BASE_SERVER_URL+"copassengerinfo/"+rideRequestId).get();
+        Log.d("CODE_FLOW", "RECEIVED CO PASSENGER INFO");
+
+        Fragment displayFragment = new FragmentMain();
+        FragmentManager fm = getSupportFragmentManager();
+
+        Bundle args = new Bundle();
+        args.putBoolean("awaitingride", awaitingRide);
+        args.putBoolean("inRide", inRide);
+        args.putBoolean("ratindpending", ratingPending);
+        args.putInt("numofcopassengers", coPassengers.size());
+
+        for(int i = 0; i < coPassengers.size(); i++){
+           args.putString("url"+i,coPassengers.get(i).picURL);
+        }
+
+        displayFragment.setArguments(args);
+
+        fm.beginTransaction().replace(R.id.content_frame,displayFragment).commit();
+        fm.executePendingTransactions();
+        setTitle("In Ride");
+    }
+
+    private void setStateBookRide(){
+        inRide = false;
+        awaitingRide = false;
+
+        Fragment displayFragment = new FragmentMain();
+        FragmentManager fm = getSupportFragmentManager();
+
+        Bundle args = new Bundle();
+        args.putBoolean("awaitingride", awaitingRide);
+        args.putBoolean("inRide", inRide);
+        args.putBoolean("ratindpending", ratingPending);
+
+        displayFragment.setArguments(args);
+
+        fm.beginTransaction().replace(R.id.content_frame,displayFragment).commit();
+        fm.executePendingTransactions();
+
+        setTitle("Book Ride");
+    }
+
+    public void requestBookRide(View view) throws ExecutionException, InterruptedException {
+        int minFare = BASECHARGE;
+        int maxFare = BASECHARGE;
+
+        if (sourceMarker != null && destinationMarker != null) {
+            final Double sLatitude = sourceMarker.getPosition().latitude;
+            final Double sLongitude = sourceMarker.getPosition().longitude;
+            final String[] sAddress = getAddress(sourceMarker.getPosition().latitude, sourceMarker.getPosition().longitude);
+            final Double dLatitude = destinationMarker.getPosition().latitude;
+            final Double dLongitude = destinationMarker.getPosition().longitude;
+            final String[] dAddress = getAddress(destinationMarker.getPosition().latitude, destinationMarker.getPosition().longitude);
+
 
             AlertDialog.Builder builder = new AlertDialog.Builder(this);
 
+            LatLng sourceCoordinate = new LatLng(sLatitude, sLongitude);
+            LatLng destinationCoordinate = new LatLng(dLatitude, dLongitude);
+
+            DistanceDurationInfo getDistDurInfoTask = new DistanceDurationInfo(sourceCoordinate, destinationCoordinate);
+            float[] journeyDetails = getDistDurInfoTask.googleDistanceDurationInfo();
+
+
+            minFare = (int) Math.max(Math.ceil(3.5 * journeyDetails[0]
+                    + 0.5 * journeyDetails[1]), minFare);
+            maxFare = (int) Math.max(Math.ceil(10 * journeyDetails[0]
+                    + 0.5 * journeyDetails[1]), maxFare);
             // Get the layout inflater
             LayoutInflater inflater = this.getLayoutInflater();
-            View dView = inflater.inflate(R.layout.cancel_ride_dialog, null);
+            view = inflater.inflate(R.layout.confirm_dialog, null);
             // Add the buttons
-
-            builder.setView(dView)
+            builder.setView(view)
                     // Add action buttons
-                    .setPositiveButton(R.string.accept, new DialogInterface.OnClickListener() {
+                    .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int id) {
-                            // todo when user cancels ride
+                            // todo when user confirms ride
+                            cabBookingDetails = new CabBookingDetails(sLatitude, sLongitude, sAddress[0], sAddress[1], dLatitude,
+                                    dLongitude, dAddress[0], dAddress[1]);
 
-                            awaitingRide = inRide = ratingPending = false;
-                            CancelRideTask cancelRide = new CancelRideTask(authenticationHeader);
+                            CabBookingTask bookCab = new CabBookingTask();
                             try {
-                                String cancelRideResult = cancelRide.execute("http://www.hoi.co.in/api/cancelride/"+rideRequestId).get();
+                                String res = bookCab.execute("http://www.hoi.co.in/api/createriderequest").get();
                             } catch (InterruptedException e) {
                                 e.printStackTrace();
                             } catch (ExecutionException e) {
                                 e.printStackTrace();
                             }
-                            stoptimertask();
-                            try {
-                                onCreateView();
-                            } catch (JSONException e) {
-                                e.printStackTrace();
-                            }
-
+                            if(sourceMarker!= null) sourceMarker.remove();
+                            if(destinationMarker!= null) destinationMarker.remove();
+                            setStateAwaitingRide();
                         }
                     })
-                    .setNegativeButton(R.string.cont, new DialogInterface.OnClickListener() {
+                    .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
                         public void onClick(DialogInterface dialog, int id) {
-                            //nothing to be done when user cancels his action
+                            //todo when user cancels ride
                         }
                     });
             // Set other dialog properties
             // Create the AlertDialog
-
-
-
             AlertDialog dialog = builder.create();
-            final TextView tvCost = (TextView) dView.findViewById(R.id.cancelcost);
-            tvCost.setText("Rs " + String.valueOf(cost));
+
+            TextView sourceAdd1 = (TextView) view.findViewById(R.id.source_address1);
+            TextView sourceAdd2 = (TextView) view.findViewById(R.id.source_address2);
+            sourceAdd1.setText("PickUp:" + sAddress[0]);
+            sourceAdd2.setText(sAddress[1]);
+            TextView destinationAdd1 = (TextView) view.findViewById(R.id.destination_address1);
+            destinationAdd1.setText("Drop:" + dAddress[0]);
+            TextView destinationAdd2 = (TextView) view.findViewById(R.id.destination_address2);
+            destinationAdd2.setText(dAddress[1]);
+            TextView fare = (TextView) view.findViewById(R.id.ride_fare);
+            fare.setText("FARE : " + minFare + " to " + maxFare);
             dialog.show();
+        } else {
 
-
-        }else if(inRide){
-            inRide = awaitingRide = false;
-            CloseRideTask closeRide = new CloseRideTask(authenticationHeader);
-            String str_result = closeRide.execute("http://www.hoi.co.in/api/closeride/"+rideRequestId).get();
-            onCreateView();
-        }
-        else if(ratingPending){
-            //do nothing
-        }
-        else {
-            int minFare = BASECHARGE;
-            int maxFare = BASECHARGE;
-
-            if (sourceMarker != null && destinationMarker != null) {
-                final Double sLatitude = sourceMarker.getPosition().latitude;
-                final Double sLongitude = sourceMarker.getPosition().longitude;
-                final String[] sAddress = getAddress(sourceMarker.getPosition().latitude, sourceMarker.getPosition().longitude);
-                final Double dLatitude = destinationMarker.getPosition().latitude;
-                final Double dLongitude = destinationMarker.getPosition().longitude;
-                final String[] dAddress = getAddress(destinationMarker.getPosition().latitude, destinationMarker.getPosition().longitude);
-
-
-                AlertDialog.Builder builder = new AlertDialog.Builder(this);
-
-                LatLng sourceCoordinate = new LatLng(sLatitude, sLongitude);
-                LatLng destinationCoordinate = new LatLng(dLatitude, dLongitude);
-
-                DistanceDurationInfo getDistDurInfoTask = new DistanceDurationInfo(sourceCoordinate, destinationCoordinate);
-                float[] journeyDetails  = getDistDurInfoTask.googleDistanceDurationInfo();
-
-
-                minFare = (int)Math.max(Math.ceil(3.5 * journeyDetails[0]
-                        + 0.5 * journeyDetails[1]), minFare);
-                maxFare = (int)Math.max(Math.ceil(10 * journeyDetails[0]
-                        + 0.5 * journeyDetails[1]), maxFare);
-                // Get the layout inflater
-                LayoutInflater inflater = this.getLayoutInflater();
-                view = inflater.inflate(R.layout.confirm_dialog, null);
-                // Add the buttons
-                builder.setView(view)
-                        // Add action buttons
-                        .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface dialog, int id) {
-                                // todo when user confirms ride
-                                cabBookingDetails = new CabBookingDetails(sLatitude, sLongitude, sAddress[0], sAddress[1], dLatitude,
-                                        dLongitude, dAddress[0], dAddress[1]);
-
-                                CabBookingTask bookCab = new CabBookingTask(authenticationHeader);
-                                try {
-                                    String res = bookCab.execute("http://www.hoi.co.in/api/createriderequest").get();
-                                } catch (InterruptedException e) {
-                                    e.printStackTrace();
-                                } catch (ExecutionException e) {
-                                    e.printStackTrace();
-                                }
-
-                                awaitingRide = true;
-                                try {
-                                    onCreateView();
-                                } catch (JSONException e) {
-                                    e.printStackTrace();
-                                }
-
-                            }
-                        })
-                        .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
-                            public void onClick(DialogInterface dialog, int id) {
-                                //todo when user cancels ride
-                            }
-                        });
-                // Set other dialog properties
-                // Create the AlertDialog
-                AlertDialog dialog = builder.create();
-
-                TextView sourceAdd1 = (TextView) view.findViewById(R.id.source_address1);
-                TextView sourceAdd2 = (TextView) view.findViewById(R.id.source_address2);
-                sourceAdd1.setText("PickUp:" + sAddress[0]);
-                sourceAdd2.setText(sAddress[1]);
-                TextView destinationAdd1 = (TextView) view.findViewById(R.id.destination_address1);
-                destinationAdd1.setText("Drop:" + dAddress[0]);
-                TextView destinationAdd2 = (TextView) view.findViewById(R.id.destination_address2);
-                destinationAdd2.setText(dAddress[1]);
-                TextView fare = (TextView) view.findViewById(R.id.ride_fare);
-                fare.setText("FARE : "+ minFare + " to " + maxFare);
-
-
-                dialog.show();
-            }else {
-
-                Toast.makeText(getApplicationContext(), "PickUp or Drop Location not set!!",
-                        Toast.LENGTH_LONG).show();
-            }
-        }
-
-    }
-
-    public void startRide(View view) throws ExecutionException, InterruptedException, JSONException {
-        if(awaitingRide){
-            awaitingRide = false;
-            inRide = true;
-            StartRideTask startRide = new StartRideTask(authenticationHeader);
-            String str_result = startRide.execute("http://www.hoi.co.in/api/startride/"+rideRequestId).get();
-            stoptimertask();
-            onCreateView();
-        }
-        else if(inRide){
-
-            //Todo check for rating pending for driver and co-pasengers
+            Toast.makeText(getApplicationContext(), "PickUp or Drop Location not set!!",
+                    Toast.LENGTH_LONG).show();
         }
     }
 
+    public void requestCancelRide(View view) throws ExecutionException, InterruptedException, JSONException {
+
+        float cost = 100.0f;
+        Double minutesIncurred = currentRideDetails.timeIncurred + System.currentTimeMillis() / 60000.0 - cabDetailsRequestTime;
+        DistanceDurationInfo getDistDurInfoTask = new DistanceDurationInfo(currentRideDetails.sourceCoordinates, cabLatestCoordinate);
+        float[] distdurInfo = getDistDurInfoTask.googleDistanceDurationInfo();
+
+        if (minutesIncurred < 5.0)
+            cost = 0;
+        else if (distdurInfo[1] < 10)
+            cost = 100;
+        else
+            cost = BASECHARGE;
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+
+        // Get the layout inflater
+        LayoutInflater inflater = this.getLayoutInflater();
+        View dView = inflater.inflate(R.layout.cancel_ride_dialog, null);
+        // Add the buttons
+
+        builder.setView(dView)
+                // Add action buttons
+                .setPositiveButton(R.string.accept, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int id) {
+                        // todo when user cancels ride
+
+                        CancelRideTask cancelRide = new CancelRideTask(authenticationHeader);
+                        try {
+                            String cancelRideResult = cancelRide.execute("http://www.hoi.co.in/api/cancelride/" + rideRequestId).get();
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        } catch (ExecutionException e) {
+                            e.printStackTrace();
+                        }
+                        stoptimertask();
+                        setStateBookRide();
+                        cabMarker.remove();
+                    }
+                })
+                .setNegativeButton(R.string.cont, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        //nothing to be done when user cancels his action
+                    }
+                });
+        // Set other dialog properties
+        // Create the AlertDialog
+
+        AlertDialog dialog = builder.create();
+        final TextView tvCost = (TextView) dView.findViewById(R.id.cancelcost);
+        tvCost.setText("Rs " + String.valueOf(cost));
+        dialog.show();
+    }
 
     /*
      * Navigation Drawer related funtions
      * dataList.add(new DrawerItem("Settings", R.drawable.ic_action_settings));
      */
-
-    private void fillNavigationDrawer() {
-        dataList.add(new DrawerItem("Book Ride", R.drawable.ic_action_ride));
-        dataList.add(new DrawerItem("Like Us", R.drawable.ic_action_good));
-        dataList.add(new DrawerItem("Favorite Places", R.drawable.ic_action_labels));
-        dataList.add(new DrawerItem("Locate Ride", R.drawable.ic_action_search));
-        dataList.add(new DrawerItem("Groups", R.drawable.ic_action_group));
-        dataList.add(new DrawerItem("About Us", R.drawable.ic_action_about));
-        dataList.add(new DrawerItem("Contact Us", R.drawable.ic_action_email));
-        dataList.add(new DrawerItem("Help", R.drawable.ic_action_help));
-    }
 
     @Override
     public void setTitle(CharSequence title) {
@@ -1077,8 +918,6 @@ public class MainActivity extends ActionBarActivity implements android.location.
         mDrawerToggle.syncState();
     }
 
-
-
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
@@ -1086,98 +925,9 @@ public class MainActivity extends ActionBarActivity implements android.location.
         mDrawerToggle.onConfigurationChanged(newConfig);
     }
 
-    public void SelectItem(int position) {
-
-        Fragment fragment = null;
-        Bundle args = new Bundle();
-        switch (position) {
-            case 0:
-                fragment = new FragmentOne();
-                args.putString(FragmentOne.ITEM_NAME, dataList.get(position)
-                        .getItemName());
-                args.putInt(FragmentOne.IMAGE_RESOURCE_ID, dataList.get(position)
-                        .getImgResID());
-                break;
-            case 1:
-                fragment = new FragmentTwo();
-                args.putString(FragmentTwo.ITEM_NAME, dataList.get(position)
-                        .getItemName());
-                args.putInt(FragmentTwo.IMAGE_RESOURCE_ID, dataList.get(position)
-                        .getImgResID());
-                break;
-            case 2:
-                fragment = new FragmentThree();
-                args.putString(FragmentThree.ITEM_NAME, dataList.get(position)
-                        .getItemName());
-                args.putInt(FragmentThree.IMAGE_RESOURCE_ID, dataList.get(position)
-                        .getImgResID());
-                break;
-            case 3:
-                fragment = new FragmentOne();
-                args.putString(FragmentOne.ITEM_NAME, dataList.get(position)
-                        .getItemName());
-                args.putInt(FragmentOne.IMAGE_RESOURCE_ID, dataList.get(position)
-                        .getImgResID());
-                break;
-            case 4:
-                fragment = new FragmentTwo();
-                args.putString(FragmentTwo.ITEM_NAME, dataList.get(position)
-                        .getItemName());
-                args.putInt(FragmentTwo.IMAGE_RESOURCE_ID, dataList.get(position)
-                        .getImgResID());
-                break;
-            case 5:
-                fragment = new FragmentThree();
-                args.putString(FragmentThree.ITEM_NAME, dataList.get(position)
-                        .getItemName());
-                args.putInt(FragmentThree.IMAGE_RESOURCE_ID, dataList.get(position)
-                        .getImgResID());
-                break;
-            case 6:
-                fragment = new FragmentOne();
-                args.putString(FragmentOne.ITEM_NAME, dataList.get(position)
-                        .getItemName());
-                args.putInt(FragmentOne.IMAGE_RESOURCE_ID, dataList.get(position)
-                        .getImgResID());
-                break;
-            case 7:
-                fragment = new FragmentTwo();
-                args.putString(FragmentTwo.ITEM_NAME, dataList.get(position)
-                        .getItemName());
-                args.putInt(FragmentTwo.IMAGE_RESOURCE_ID, dataList.get(position)
-                        .getImgResID());
-                break;
-            default:
-                break;
-        }
-
-        fragment.setArguments(args);
-        FragmentManager frgManager = getFragmentManager();
-        frgManager.beginTransaction().replace(R.id.content_frame, fragment)
-                .commit();
-
-        mDrawerList.setItemChecked(position, true);
-        setTitle(dataList.get(position).getItemName());
-        mDrawerLayout.closeDrawer(mDrawerList);
-
-    }
-
-    private class DrawerItemClickListener implements
-            ListView.OnItemClickListener {
-        @Override
-        public void onItemClick(AdapterView<?> parent, View view, int position,
-                                long id) {
-            SelectItem(position);
-
-        }
-    }
-
-
  /*
   * Functions to get the location of the user and set marker for pickup and drop location
   */
-
-
 
     private Location getLastKnownLocation(LocationManager mLocationManager) {
         List<String> providers = mLocationManager.getProviders(true);
@@ -1211,33 +961,31 @@ public class MainActivity extends ActionBarActivity implements android.location.
     @Override
     public void onLocationChanged(Location location) {
 
-        System.out.println("check:Location not null");
-
         // Getting latitude of the current location
         double latitude = location.getLatitude();
 
         // Getting longitude of the current location
         double longitude = location.getLongitude();
-        float segmentDistance = calculateDistance(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude,
-                latitude, longitude);
-        int segmentDuration = (int) calculateTime(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude,
-                latitude, longitude);
-        distanceTravelled = distanceTravelled + segmentDistance;
-        durationTravelled = durationTravelled + segmentDuration;
 
-        cabFare = cabFare + billingRate * segmentDistance + 0.5f * segmentDuration;
+        if(inRide){
+            float segmentDistance = calculateDistance(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude,
+                    latitude, longitude);
+            int segmentDuration = (int) calculateTime(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude,
+                    latitude, longitude);
 
-        // Creating a LatLng object for the current location
-        currentLocationCoordinate = new LatLng(latitude, longitude);
+            currentRideDetails.distanceIncurred += segmentDistance;
+            currentRideDetails.timeIncurred += segmentDuration;
+            currentRideDetails.costIncurred += billingRate * segmentDistance + 0.5f * segmentDuration;
 
-        UpdateRideTask updateRide = new UpdateRideTask(authenticationHeader);
-        updateRide.execute("http://www.hoi.co.in/api/update/"+rideRequestId);
+            // Creating a LatLng object for the current location
+            currentLocationCoordinate = new LatLng(latitude, longitude);
 
-        CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(currentLocationCoordinate, 15);
-        mGoogleMap.animateCamera(yourLocation);
+            UpdateRideTask updateRide = new UpdateRideTask();
+            updateRide.execute("http://www.hoi.co.in/api/update/"+rideRequestId);
 
-
-
+            CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(currentLocationCoordinate, 15);
+            mGoogleMap.animateCamera(yourLocation);
+        }
     }
 
     public String[] getAddress(double latitude, double longitude){
@@ -1291,8 +1039,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
 	}
 
 	@Override
-	public void onLoadFinished(Loader<Cursor> arg0, Cursor c) {
-	}
+	public void onLoadFinished(Loader<Cursor> arg0, Cursor c) {}
 
 	@Override
 	public void onLoaderReset(Loader<Cursor> arg0) {
@@ -1323,7 +1070,6 @@ public class MainActivity extends ActionBarActivity implements android.location.
         // TODO Auto-generated method stub
         mGoogleMap.animateCamera(CameraUpdateFactory.newLatLng(latLng));
     }
-
 
     /*
      * Awaiting ride user state related methods
@@ -1359,36 +1105,9 @@ public class MainActivity extends ActionBarActivity implements android.location.
         };
     }
 
-
     /*
      * Booking ride related methods
      */
-
-    public void getCabBookingData() throws JSONException {
-        cabBookingDetails = new CabBookingDetails(cabBookingData.getDouble("origin_latitude"),cabBookingData.getDouble("origin_longitude"),
-                cabBookingData.getString("origin_address1"),cabBookingData.getString("origin_address2"),cabBookingData.getDouble("destination_latitude"),
-                cabBookingData.getDouble("destination_longitude"),cabBookingData.getString("destination_address1"),
-                cabBookingData.getString("destination_address2"));
-        cabBookingDetails.requestdatetime = cabBookingData.getString("requestdatetime");
-    }
-
-    public void getCabAwaitingData() throws  JSONException{
-        JSONObject carInfo  = cabAwaitingData.getJSONObject("carinfo");
-
-        CarDetail carDetails = new CarDetail(carInfo.getInt("id"),carInfo.getString("regnumber"),
-                carInfo.getString("model"), carInfo.getString("make"),carInfo.getString("color"));
-
-        rideDetails = new RideDetail(cabAwaitingData.getDouble("ridelastlong"),cabAwaitingData.getDouble("ridelastlat"),
-                carDetails, cabAwaitingData.getString("drivername"), cabAwaitingData.getString("driverpic"),cabAwaitingData.getString("driverphone"),
-                cabAwaitingData.getString("driverbgc"),cabAwaitingData.getInt("occupancy"), (float) cabAwaitingData.getDouble("billingrate"),
-                cabAwaitingData.getInt("riderequestid"));
-
-        cabLatestCoordinate = new LatLng(cabAwaitingData.getDouble("ridelastlat"), cabAwaitingData.getDouble("ridelastlong"));
-
-        rideRequestId = cabAwaitingData.getInt("riderequestid");
-    }
-
-
     private float calculateDistance(Double slat, Double slong, Double dlat, Double dlong){
         float distance =  0.0f;
         distance = (float)(142.6 * Math.sqrt(Math.pow(Math.abs(slat-dlat),2)+Math.pow(Math.abs(slong-dlong),2)));
@@ -1408,24 +1127,16 @@ public class MainActivity extends ActionBarActivity implements android.location.
         inflater.inflate(R.menu.main, menu);
         return super.onCreateOptionsMenu(menu);
     }
-/*
+
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        // The action bar home/up action should open or close the drawer.
-        // ActionBarDrawerToggle will take care of this.
+        // Handle presses on the action bar items
         if (mDrawerToggle.onOptionsItemSelected(item)) {
             return true;
         }
 
-        return false;
-    }
-*/
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle presses on the action bar items
         switch (item.getItemId()) {
             case R.id.action_search:
-
                 return true;
             case R.id.action_settings:
                 applicationLogout();
@@ -1449,21 +1160,15 @@ public class MainActivity extends ActionBarActivity implements android.location.
      */
     private class CabBookingTask extends AsyncTask<String, Void, String> {
 
-        private final String authHeader;
         private HttpResponse response;
-        private JSONObject jObject;
-
-        CabBookingTask(String authHeader) {
-            this.authHeader = authHeader;
-        }
+        private JSONObject cabBookingData;
 
         @Override
         protected String doInBackground(String... url) {
             // TODO: attempt authentication against a network service.
             SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
             String currentDateandTime = sdf.format(new Date());
-            cabBookingDetails.requestdatetime = currentDateandTime;
-            System.out.println(cabBookingDetails.requestdatetime);
+
             Encryptor encryptor = new Encryptor();
             String encrptedkey = "";
 
@@ -1485,7 +1190,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
                 System.out.println("ch1");
                 HttpPost request = new HttpPost(url[0]);
-                request.addHeader("Authorization", "Basic " + authHeader);
+                request.addHeader("Authorization", "Basic " + authenticationHeader);
                 request.addHeader("androidkey",encrptedkey);
                 request.addHeader("Content-Type", "application/json");
 
@@ -1501,7 +1206,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
                 cabBookingData.accumulate("destination_longitude", cabBookingDetails.destination_longitude);
                 cabBookingData.accumulate("destination_address1", cabBookingDetails.destination_address1);
                 cabBookingData.accumulate("destination_address2", cabBookingDetails.destination_address2);
-                cabBookingData.accumulate("requestdatetime", cabBookingDetails.requestdatetime);
+                cabBookingData.accumulate("requestdatetime", currentDateandTime);
 
                 // 4. convert JSONObject to JSON to String
                 json = cabBookingData.toString();
@@ -1511,32 +1216,26 @@ public class MainActivity extends ActionBarActivity implements android.location.
                 request.setEntity(new StringEntity(json));
                 HttpClient httpclient = new DefaultHttpClient();
                 try {
-                    System.out.println("ch2");
                     response = httpclient.execute(request);
-
                 } catch (ClientProtocolException e) {
                     e.printStackTrace();
                 }
-
             } catch (IOException e) {
                 e.printStackTrace();
             } catch (JSONException e) {
                 e.printStackTrace();
             }
 
-            System.out.println("ch3");
             InputStream inputStream = null;
             String result = null;
             try {
-                System.out.println("ch4");
                 HttpEntity entity = response.getEntity();
-
                 inputStream = entity.getContent();
+
                 // json is UTF-8 by default
                 BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"), 8);
                 StringBuilder sb = new StringBuilder();
 
-                System.out.println("ch5");
                 String line = null;
                 while ((line = reader.readLine()) != null)
                 {
@@ -1547,7 +1246,6 @@ public class MainActivity extends ActionBarActivity implements android.location.
                 // Oops
             }
             finally {
-                System.out.println(result);
                 try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
             }
 
@@ -1556,27 +1254,26 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
         @Override
         protected void onPostExecute(final String data) {
-
-
+            JSONObject jObject;
             if (data != null) {
 
                 try {
-                    cabAwaitingData = new JSONObject(data);
-                    getCabAwaitingData();
-
+                    jObject = new JSONObject(data);
+                    currentRideDetails = new DetailCurrentRide(cabBookingData, jObject);
+                    carDetails = new DetailCar(jObject.getJSONObject("carinfo"));
+                    driverDetails = new DetailDriver(jObject);
+                    cabLatestCoordinate = new LatLng(jObject.getDouble("ridelastlat"), jObject.getDouble("ridelastlong"));
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
 
             } else {
                 //Todo if no data come from server
-
             }
         }
 
         @Override
         protected void onCancelled() {
-
         }
     }
 
@@ -1835,12 +1532,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
     private class UpdateRideTask extends AsyncTask<String, Void, String> {
 
-        private final String authHeader;
         private HttpResponse response;
-
-        UpdateRideTask(String authHeader) {
-            this.authHeader = authHeader;
-        }
 
         @Override
         protected String doInBackground(String... url) {
@@ -1865,10 +1557,8 @@ public class MainActivity extends ActionBarActivity implements android.location.
             }
 
             try {
-
-                System.out.println("ch1");
                 HttpPost request = new HttpPost(url[0]);
-                request.addHeader("Authorization", "Basic " + authHeader);
+                request.addHeader("Authorization", "Basic " + authenticationHeader);
                 request.addHeader("androidkey",encrptedkey);
                 request.addHeader("Content-Type", "application/json");
 
@@ -1879,9 +1569,9 @@ public class MainActivity extends ActionBarActivity implements android.location.
                 jsonObject.accumulate("ridelastlat", currentLocationCoordinate.latitude);
                 jsonObject.accumulate("ridelastlonglong", currentLocationCoordinate.longitude);
                 jsonObject.accumulate("requestdatetime", currentDateandTime);
-                jsonObject.accumulate("estimateddistance", distanceTravelled);
-                jsonObject.accumulate("estimatedtime", durationTravelled);
-                jsonObject.accumulate("estimatedfare", cabFare);
+                jsonObject.accumulate("estimateddistance", currentRideDetails.distanceIncurred);
+                jsonObject.accumulate("estimatedtime", currentRideDetails.timeIncurred);
+                jsonObject.accumulate("estimatedfare", currentRideDetails.costIncurred);
 
                 if((++stateCounter)%10 == 0){
                     Geocoder gcd = new Geocoder(MainActivity.this, Locale.getDefault());
@@ -1895,14 +1585,12 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
                 // 4. convert JSONObject to JSON to String
                 json = jsonObject.toString();
-                System.out.println(json);
 
                 // 5. set json to StringEntity
 
                 request.setEntity(new StringEntity(json));
                 HttpClient httpclient = new DefaultHttpClient();
                 try {
-                    System.out.println("ch2");
                     response = httpclient.execute(request);
 
                 } catch (ClientProtocolException e) {
@@ -1915,19 +1603,15 @@ public class MainActivity extends ActionBarActivity implements android.location.
                 e.printStackTrace();
             }
 
-            System.out.println("ch3");
             InputStream inputStream = null;
             String result = null;
             try {
-                System.out.println("ch4");
                 HttpEntity entity = response.getEntity();
-
                 inputStream = entity.getContent();
+
                 // json is UTF-8 by default
                 BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"), 8);
                 StringBuilder sb = new StringBuilder();
-
-                System.out.println("ch5");
                 String line = null;
                 while ((line = reader.readLine()) != null)
                 {
@@ -1938,17 +1622,13 @@ public class MainActivity extends ActionBarActivity implements android.location.
                 // Oops
             }
             finally {
-                System.out.println(result);
                 try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
             }
-
             return result;
         }
 
         @Override
         protected void onPostExecute(final String data) {
-
-
             JSONObject jObject;
 
             if (data != null) {
@@ -1956,7 +1636,6 @@ public class MainActivity extends ActionBarActivity implements android.location.
                 try{
                     jObject = new JSONObject(data);
                     cabLatestCoordinate = new LatLng(jObject.getDouble("ridelastlat"),jObject.getDouble("ridelastlong"));
-
                     billingRate = (float) jObject.getDouble("billingrate");
 
                     IconGenerator iconFactory = new IconGenerator(MainActivity.this);
@@ -2092,12 +1771,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
     private class CloseRideTask extends AsyncTask<String, Void, String> {
 
-        private final String authHeader;
         private HttpResponse response;
-
-        CloseRideTask(String authHeader) {
-            this.authHeader = authHeader;
-        }
 
         @Override
         protected String doInBackground(String... url) {
@@ -2125,7 +1799,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
                 System.out.println("ch1");
                 HttpPost request = new HttpPost(url[0]);
-                request.addHeader("Authorization", "Basic " + authHeader);
+                request.addHeader("Authorization", "Basic " + authenticationHeader);
                 request.addHeader("androidkey",encrptedkey);
 
                 List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>(1);
@@ -2179,28 +1853,12 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
         @Override
         protected void onPostExecute(final String data) {
-
-
-            JSONObject jObject;
+        JSONObject jObject;
 
             if (data != null) {
 
                 try{
                     jObject = new JSONObject(data);
-                    //driverRating = jObject.getInt("driverrating");
-                   // cabLatestCoordinate = new LatLng(jObject.getDouble("ridelastlat"),jObject.getDouble("ridelastlong"));
-
-                  //  billingRate = (float) jObject.getDouble("billingrate");
-
-                    //IconGenerator iconFactory = new IconGenerator(MainActivity.this);
-                    //iconFactory.setColor(Color.YELLOW);
-                    //cabMarker = addIcon(iconFactory, "HOI CAB", cabLatestCoordinate);
-
-//                    CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(cabLatestCoordinate, 15);
-  //                  mGoogleMap.animateCamera(yourLocation);
-                    //System.out.println(driverRating);
-
-
                 }catch(Exception e){
                     Log.d("Exception", e.toString());
                 }
@@ -2214,6 +1872,235 @@ public class MainActivity extends ActionBarActivity implements android.location.
         @Override
         protected void onCancelled() {
 
+        }
+    }
+
+    private class RideRequestInfo extends AsyncTask<String, Void, String> {
+
+        private HttpResponse response;
+
+        @Override
+        protected String doInBackground(String... url) {
+            // TODO: attempt authentication against a network service.
+            SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
+            String currentDateandTime = sdf.format(new Date());
+            Encryptor encryptor = new Encryptor();
+            String encrptedkey = "";
+
+            try {
+                encrptedkey = encryptor.getEncryptedKeyValue(currentDateandTime);
+            } catch (InvalidKeyException e1) {
+                e1.printStackTrace();
+            } catch (IllegalBlockSizeException e1) {
+                e1.printStackTrace();
+            } catch (BadPaddingException e1) {
+                e1.printStackTrace();
+            } catch (UnsupportedEncodingException e1) {
+                e1.printStackTrace();
+            } catch (DecoderException e1) {
+                e1.printStackTrace();
+            }
+
+            try {
+
+                HttpPost request = new HttpPost(url[0]);
+                request.addHeader("Authorization", "Basic " + authenticationHeader);
+                request.addHeader("androidkey",encrptedkey);
+
+                List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>(1);
+                nameValuePairs.add(new BasicNameValuePair("counter", currentDateandTime));
+
+                request.setEntity(new UrlEncodedFormEntity(nameValuePairs));
+
+                HttpClient httpclient = new DefaultHttpClient();
+
+                try {
+                    response = httpclient.execute(request);
+                } catch (ClientProtocolException e) {
+                    e.printStackTrace();
+                }
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            InputStream inputStream = null;
+            String result = null;
+            try {
+                HttpEntity entity = response.getEntity();
+                inputStream = entity.getContent();
+
+                // json is UTF-8 by default
+                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"), 8);
+                StringBuilder sb = new StringBuilder();
+                String line = null;
+                while ((line = reader.readLine()) != null)
+                {
+                    sb.append(line + "\n");
+                }
+                result = sb.toString();
+            } catch (Exception e) {
+                // Oops
+            }
+            finally {
+                try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
+            }
+            JSONObject jObject, genRideRequestInfo, rideResponceInfo;
+
+            try {
+                jObject = new JSONObject(result);
+                genRideRequestInfo = jObject.getJSONObject("grri");
+                rideResponceInfo = jObject.getJSONObject("rrd");
+                currentRideDetails = new DetailCurrentRide(genRideRequestInfo);
+                carDetails = new DetailCar(rideResponceInfo.getJSONObject("carinfo"));
+                driverDetails = new DetailDriver(jObject);
+                cabLatestCoordinate = new LatLng(rideResponceInfo.getDouble("ridelastlong"), rideResponceInfo.getDouble("ridelastlat"));
+            } catch (Exception e) {
+                Log.d("Exception", e.toString());
+            }
+            return result;
+        }
+
+        @Override
+        protected void onPostExecute(final String data) {
+        }
+
+        @Override
+        protected void onCancelled() {
+
+        }
+    }
+
+    private class CoPassengerInfo extends AsyncTask<String, Void, String> {
+
+        private HttpResponse response;
+
+        @Override
+        protected String doInBackground(String... url) {
+            // TODO: attempt authentication against a network service.
+            SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
+            String currentDateandTime = sdf.format(new Date());
+            Encryptor encryptor = new Encryptor();
+            String encrptedkey = "";
+
+            try {
+                encrptedkey = encryptor.getEncryptedKeyValue(currentDateandTime);
+            } catch (InvalidKeyException e1) {
+                e1.printStackTrace();
+            } catch (IllegalBlockSizeException e1) {
+                e1.printStackTrace();
+            } catch (BadPaddingException e1) {
+                e1.printStackTrace();
+            } catch (UnsupportedEncodingException e1) {
+                e1.printStackTrace();
+            } catch (DecoderException e1) {
+                e1.printStackTrace();
+            }
+
+            try {
+
+                HttpPost request = new HttpPost(url[0]);
+                request.addHeader("Authorization", "Basic " + authenticationHeader);
+                request.addHeader("androidkey",encrptedkey);
+
+                List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>(1);
+                nameValuePairs.add(new BasicNameValuePair("counter", currentDateandTime));
+
+                request.setEntity(new UrlEncodedFormEntity(nameValuePairs));
+
+                HttpClient httpclient = new DefaultHttpClient();
+
+                try {
+                    response = httpclient.execute(request);
+                } catch (ClientProtocolException e) {
+                    e.printStackTrace();
+                }
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            InputStream inputStream = null;
+            String result = null;
+            try {
+                HttpEntity entity = response.getEntity();
+                inputStream = entity.getContent();
+
+                // json is UTF-8 by default
+                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"), 8);
+                StringBuilder sb = new StringBuilder();
+                String line = null;
+                while ((line = reader.readLine()) != null)
+                {
+                    sb.append(line + "\n");
+                }
+                result = sb.toString();
+            } catch (Exception e) {
+                // Oops
+            }
+            finally {
+                try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
+            }
+            JSONObject jObject;
+            try{
+                jObject = new JSONObject(result);
+                Log.d("DATA_CO_PASSENGER_INFO", result);
+                coPassengers = new ArrayList<CoPassenger>();
+
+                if(jObject.getInt("riderequestid1") != 0)
+                    coPassengers.add(new CoPassenger(jObject.getString("CoPassenger1name"),jObject.getString("CoPassenger1picURL"),
+                            jObject.getInt("riderequestid1")));
+
+                if(jObject.getInt("riderequestid2") != 0)
+                    coPassengers.add(new CoPassenger(jObject.getString("CoPassenger2name"),jObject.getString("CoPassenger2picURL"),
+                            jObject.getInt("riderequestid2")));
+
+                if(jObject.getInt("riderequestid3") != 0)
+                    coPassengers.add(new CoPassenger(jObject.getString("CoPassenger3name"),jObject.getString("CoPassenger3picURL"),
+                            jObject.getInt("riderequestid3")));
+
+                if(jObject.getInt("riderequestid4") != 0)
+                    coPassengers.add(new CoPassenger(jObject.getString("CoPassenger4name"),jObject.getString("CoPassenger4picURL"),
+                            jObject.getInt("riderequestid4")));
+                Log.d("CODE_FLOW", "CO PASSENGERS DATA RECEIVED");
+            }catch(Exception e){
+                Log.d("Exception", e.toString());
+            }
+            return result;
+        }
+
+        @Override
+        protected void onPostExecute(final String data) {
+        }
+
+        @Override
+        protected void onCancelled() {
+
+        }
+    }
+
+    private class DownloadImageTask extends AsyncTask<String, Void, Bitmap> {
+        ImageView bmImage;
+
+        public DownloadImageTask(ImageView bmImage) {
+            this.bmImage = bmImage;
+        }
+
+        protected Bitmap doInBackground(String... urls) {
+            String urldisplay = urls[0];
+            Bitmap mIcon11 = null;
+            try {
+                InputStream in = new java.net.URL(urldisplay).openStream();
+                mIcon11 = BitmapFactory.decodeStream(in);
+            } catch (Exception e) {
+                Log.e("Error", e.getMessage());
+                e.printStackTrace();
+            }
+            return mIcon11;
+        }
+
+        protected void onPostExecute(Bitmap result) {
+            bmImage.setImageBitmap(result);
         }
     }
 

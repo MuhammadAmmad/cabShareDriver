@@ -20,8 +20,6 @@ public class CabBookingDetails {
 
     String destination_address2;
 
-    String requestdatetime;
-
     public CabBookingDetails(Double sLat, Double sLong, String sa1, String sa2, Double dLat, Double dLong, String da1, String da2){
         origin_latitude = sLat;
         origin_longitude = sLong;
@@ -31,7 +29,5 @@ public class CabBookingDetails {
         destination_longitude = dLong;
         destination_address1 = da1;
         destination_address2 = da2;
-        requestdatetime = "";
-
     }
 }
