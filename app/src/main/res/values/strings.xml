@@ -50,6 +50,11 @@
     <string name="closeDrawer">HOI</string>
     <string name="submit">Submit</string>
     <string name="recharge">ADD HOI MONEY</string>
+    <string name="facebook_app_id">1410914282548756</string>
+    <string name="signup">SignUp with Facebook</string>
+    <string name="error_empty">This cannot be empty</string>
+    <string name="com_facebook_loginview_log_in_button">SignUp with Facebook</string>
+
     <string-array name="address_type">
         <item>Home</item>
         <item>Office</item>

@@ -1,0 +1,131 @@
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/scrollView1"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent" >
+    <LinearLayout
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:background="#e8e8e7"
+        android:orientation="vertical"
+        >
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="#e8e8e7"
+            android:orientation="horizontal"
+            android:layout_alignParentTop="true">
+
+            <ImageView android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/ic_logo"
+                android:layout_marginLeft="10dp"/>
+
+
+            <TextView android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Ride Summary"
+                android:textColor="#2582C5"
+                android:textSize="18sp"
+                android:layout_marginLeft="20dp"
+                android:textStyle="bold"
+                android:layout_gravity="center_horizontal|center_vertical"/>
+        </LinearLayout>
+
+
+        <LinearLayout android:layout_width="fill_parent"
+            android:layout_height="fill_parent"
+            android:layout_marginLeft="16dp"
+            android:layout_marginTop="16dp"
+            android:layout_marginRight="16dp"
+            android:layout_marginBottom="16dp"
+            android:orientation="vertical"
+            android:background="@drawable/greybackground"
+            >
+
+            <TextView
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent"
+                android:text="Pickup Address"
+                android:layout_marginTop="10dp"/>
+
+            <TextView android:layout_width="fill_parent"
+                android:layout_height="40dp"
+                android:id="@+id/source"
+                android:hint="Source Address"
+                android:background="#f3f3f3"
+                android:paddingLeft="5dp"
+                android:layout_gravity="center_vertical"
+                />
+
+            <TextView
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent"
+                android:text="Drop Address"
+                android:layout_marginTop="10dp"/>
+
+            <TextView android:layout_width="fill_parent"
+                android:layout_height="40dp"
+                android:id="@+id/destination"
+                android:hint="Destination Address"
+                android:background="#f3f3f3"
+                android:paddingLeft="5dp"/>
+
+            <TextView android:layout_width="fill_parent"
+                android:layout_height="40dp"
+                android:hint="Distance Covered in km"
+                android:id="@+id/distance"
+                android:background="#f3f3f3"
+                android:paddingLeft="5dp"
+                android:layout_marginTop="15dp"/>
+
+            <TextView android:layout_width="fill_parent"
+                android:layout_height="40dp"
+                android:hint="Ride Duration in mins"
+                android:id="@+id/duration"
+                android:background="#f3f3f3"
+                android:paddingLeft="5dp"
+                android:layout_marginTop="15dp"/>
+
+            <TextView
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent"
+                android:text="Toll"
+                android:layout_marginTop="10dp"/>
+            <TextView
+                android:id="@+id/tolltax"
+                android:layout_width="fill_parent"
+                android:layout_height="40dp"
+                android:layout_marginTop="15dp"
+                android:background="#f3f3f3"
+                android:hint="Toll"
+                android:paddingLeft="5dp" />
+
+            <TextView
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent"
+                android:text="Fare"
+                android:layout_marginTop="10dp"/>
+            <TextView
+                android:id="@+id/fare"
+                android:layout_width="fill_parent"
+                android:layout_height="40dp"
+                android:layout_marginTop="15dp"
+                android:background="#f3f3f3"
+                android:hint="fare"
+                android:paddingLeft="5dp" />
+
+            <Button
+                android:id="@+id/ride_summary_close"
+                android:layout_width="190dp"
+                android:layout_height="38dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/btn"
+                android:text="Close"
+                android:textColor="#fff" />
+
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>
