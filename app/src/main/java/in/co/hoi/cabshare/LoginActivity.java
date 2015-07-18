@@ -32,6 +32,13 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.android.volley.DefaultRetryPolicy;
+import com.android.volley.Request;
+import com.android.volley.Response;
+import com.android.volley.RetryPolicy;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.JsonObjectRequest;
 import com.facebook.AccessToken;
 import com.facebook.CallbackManager;
 import com.facebook.FacebookCallback;
@@ -44,6 +51,7 @@ import com.facebook.Profile;
 import com.facebook.login.LoginManager;
 import com.facebook.login.LoginResult;
 import com.facebook.login.widget.LoginButton;
+
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.NameValuePair;
@@ -51,17 +59,18 @@ import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.message.BasicNameValuePair;
 import org.json.JSONException;
 import org.json.JSONObject;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -102,6 +111,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
     ProgressDialog processDialog;
 
 
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -112,6 +122,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
         setContentView(R.layout.activity_login);
 
         callbackManager = CallbackManager.Factory.create();
+        LoginManager.getInstance().logOut();
 
         loginButtonFacebook = (LoginButton) findViewById(R.id.login_button);
         loginButtonFacebook.setReadPermissions("user_friends");
@@ -126,7 +137,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
                 profile = Profile.getCurrentProfile();
                 facebookLoginDetails = new JSONObject();
                 try {
-                   List<GraphResponse> res = new GraphRequest(
+                    List<GraphResponse> res = new GraphRequest(
                             accessToken, "/me/friends",
                             null, HttpMethod.GET, new GraphRequest.Callback() {
                         public void onCompleted(GraphResponse response) {
@@ -159,16 +170,15 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
                     Log.d("EXCEPTION", e.getMessage());
                 }
 
-                if(numberOfFriends >= 20){
+                if (numberOfFriends >= 20) {
                     try {
                         createSignUpDialog();
                     } catch (JSONException e) {
                         e.printStackTrace();
                     }
-                }
-                else{
+                } else {
                     //todo show error dialog : signup failed
-                    Toast.makeText(getApplicationContext(),"Your Facebook Account doesnot have more than 20 friends",Toast.LENGTH_LONG).show();
+                    Toast.makeText(getApplicationContext(), "Your Facebook Account doesnot have more than 20 friends", Toast.LENGTH_LONG).show();
                 }
                 LoginManager.getInstance().logOut();
             }
@@ -218,6 +228,228 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
             }
         });
 
+        TextView forgotPass = (TextView) findViewById(R.id.forgot_password);
+        forgotPass.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                //todo show forgot password dialog
+                LoginManager.getInstance().registerCallback(callbackManager,
+                        new FacebookCallback<LoginResult>() {
+                            @Override
+                            public void onSuccess(LoginResult loginResult) {
+                                Log.d("Success", "Login");
+                            }
+                            @Override
+                            public void onCancel() {
+
+                            }
+                            @Override
+                            public void onError(FacebookException exception) {
+                                Log.e("Exception", exception.getMessage());
+                            }
+                        });
+                LoginManager.getInstance().logInWithReadPermissions(LoginActivity.this, Arrays.asList("public_profile", "user_friends"));
+                AlertDialog.Builder builder = new AlertDialog.Builder(LoginActivity.this);
+
+                // Get the layout inflater
+                LayoutInflater inflater = LoginActivity.this.getLayoutInflater();
+                View dView = inflater.inflate(R.layout.dialog_forgotpass, null);
+
+                final EditText otp = (EditText) dView.findViewById(R.id.otp);
+                otp.setHint("Enter Mobile No");
+
+                // Add the buttons
+                builder.setView(dView)
+
+                        // Add action buttons
+                        .setPositiveButton(R.string.submit, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int id) {
+                            }
+                        })
+                        .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int id) {
+                                //nothing to be done when user cancels his action
+                                LoginManager.getInstance().logOut();
+                                LoginManager.getInstance().registerCallback(callbackManager, new FacebookCallback<LoginResult>() {
+                                    @Override
+                                    public void onSuccess(LoginResult loginResult) {
+                                        //Todo show dialog for information received
+                                        accessToken = loginResult.getAccessToken();
+                                        profile = Profile.getCurrentProfile();
+                                        facebookLoginDetails = new JSONObject();
+                                        try {
+                                            List<GraphResponse> res = new GraphRequest(
+                                                    accessToken, "/me/friends",
+                                                    null, HttpMethod.GET, new GraphRequest.Callback() {
+                                                public void onCompleted(GraphResponse response) {
+
+
+                                                }
+                                            }
+                                            ).executeAsync().get();
+                                            JSONObject resp = null;
+                                            try {
+                                                resp = res.get(0).getJSONObject();
+                                                numberOfFriends = (resp.getJSONObject("summary")).getInt("total_count");
+                                            } catch (JSONException e) {
+                                                Log.d("EXCEPTION", e.getMessage());
+                                            }
+                                            GraphRequest request = GraphRequest.newMeRequest(
+                                                    accessToken,
+                                                    new GraphRequest.GraphJSONObjectCallback() {
+                                                        @Override
+                                                        public void onCompleted(JSONObject object, GraphResponse response) {
+                                                        }
+                                                    });
+                                            Bundle parameters = new Bundle();
+                                            parameters.putString("fields", "id,first_name,gender,last_name,link,name,verified,email");
+                                            request.setParameters(parameters);
+                                            res = request.executeAsync().get();
+                                            facebookLoginDetails = res.get(0).getJSONObject();
+
+                                        } catch (Exception e) {
+                                            Log.d("EXCEPTION", e.getMessage());
+                                        }
+
+                                        if (numberOfFriends >= 20) {
+                                            try {
+                                                createSignUpDialog();
+                                            } catch (JSONException e) {
+                                                e.printStackTrace();
+                                            }
+                                        } else {
+                                            //todo show error dialog : signup failed
+                                            Toast.makeText(getApplicationContext(), "Your Facebook Account doesnot have more than 20 friends", Toast.LENGTH_LONG).show();
+                                        }
+                                        LoginManager.getInstance().logOut();
+                                    }
+
+                                    @Override
+                                    public void onCancel() {
+                                        Log.i("LOGIN", "Facebook Login Cancelled");
+                                    }
+
+                                    @Override
+                                    public void onError(FacebookException exception) {
+                                        Log.i("LOGIN", exception.getMessage());
+                                    }
+                                });
+                            }
+                        });
+                // Set other dialog properties
+                // Create the AlertDialog
+
+
+                final AlertDialog dialog = builder.create();
+                dialog.setCanceledOnTouchOutside(false);
+                dialog.show();
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        final String mobileNo = otp.getText().toString();
+                        if (mobileNo.isEmpty()) {
+                            otp.setError("Enter Mobile no");
+                        } else if (mobileNo.length() != 10 || !mobileNo.matches("[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]")) {
+                            otp.setError("wrong mobile number");
+                        } else {
+
+
+                            Response.Listener<JSONObject> listener = new Response.Listener<JSONObject>() {
+                                @Override
+                                public void onResponse(JSONObject response) {
+                                    try {
+                                        if (response.getBoolean("response")) {
+                                            dialog.dismiss();
+                                        } else {
+                                            otp.setError("Error! Please resend");
+                                        }
+                                    } catch (Exception e) {
+                                        Log.e("EXCEPTION", e.getMessage());
+                                    }
+                                }
+                            };
+                            JSONObject data = new JSONObject();
+                            try {
+                                data = new JSONObject().accumulate("otp", Profile.getCurrentProfile().getId());
+                                Log.d("FACEBOOK_ID", Profile.getCurrentProfile().getId());
+                            } catch (JSONException e) {
+                                Log.e("EXCEPTION", e.getMessage());
+                            }
+                            volleyRequests(data, "http://www.hoi.co.in/password/changepassword/" + mobileNo,
+                                    listener);
+                            dialog.dismiss();
+                            LoginManager.getInstance().logOut();
+                            LoginManager.getInstance().registerCallback(callbackManager, new FacebookCallback<LoginResult>() {
+                                @Override
+                                public void onSuccess(LoginResult loginResult) {
+                                    //Todo show dialog for information received
+                                    accessToken = loginResult.getAccessToken();
+                                    profile = Profile.getCurrentProfile();
+                                    facebookLoginDetails = new JSONObject();
+                                    try {
+                                        List<GraphResponse> res = new GraphRequest(
+                                                accessToken, "/me/friends",
+                                                null, HttpMethod.GET, new GraphRequest.Callback() {
+                                            public void onCompleted(GraphResponse response) {
+
+
+                                            }
+                                        }
+                                        ).executeAsync().get();
+                                        JSONObject resp = null;
+                                        try {
+                                            resp = res.get(0).getJSONObject();
+                                            numberOfFriends = (resp.getJSONObject("summary")).getInt("total_count");
+                                        } catch (JSONException e) {
+                                            Log.d("EXCEPTION", e.getMessage());
+                                        }
+                                        GraphRequest request = GraphRequest.newMeRequest(
+                                                accessToken,
+                                                new GraphRequest.GraphJSONObjectCallback() {
+                                                    @Override
+                                                    public void onCompleted(JSONObject object, GraphResponse response) {
+                                                    }
+                                                });
+                                        Bundle parameters = new Bundle();
+                                        parameters.putString("fields", "id,first_name,gender,last_name,link,name,verified,email");
+                                        request.setParameters(parameters);
+                                        res = request.executeAsync().get();
+                                        facebookLoginDetails = res.get(0).getJSONObject();
+
+                                    } catch (Exception e) {
+                                        Log.d("EXCEPTION", e.getMessage());
+                                    }
+
+                                    if (numberOfFriends >= 20) {
+                                        try {
+                                            createSignUpDialog();
+                                        } catch (JSONException e) {
+                                            e.printStackTrace();
+                                        }
+                                    } else {
+                                        //todo show error dialog : signup failed
+                                        Toast.makeText(getApplicationContext(), "Your Facebook Account doesnot have more than 20 friends", Toast.LENGTH_LONG).show();
+                                    }
+                                    LoginManager.getInstance().logOut();
+                                }
+
+                                @Override
+                                public void onCancel() {
+                                    Log.i("LOGIN", "Facebook Login Cancelled");
+                                }
+
+                                @Override
+                                public void onError(FacebookException exception) {
+                                    Log.i("LOGIN", exception.getMessage());
+                                }
+                            });
+                        }
+                    }
+                });
+
+            }
+        });
     }
 
     private void ckeckForServices() {
@@ -377,6 +609,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
         mEmailView.setAdapter(adapter);
     }
 
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -437,6 +670,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
             @Override
             public void onClick(View v)
             {
+                startProcessDialog();
                 boolean checkDismiss = true;
                 if(TextUtils.isEmpty(email.getText().toString())) {
                     email.setError("This cannot be empty");
@@ -461,12 +695,104 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
                     //Todo submit the form
                     try {
                         facebookLoginDetails.accumulate("mobile",mobile.getText().toString());
-                        facebookLoginDetails.accumulate("password",password.getText().toString());
-                        (new FacebookSignUpTask()).execute();
+                        facebookLoginDetails.accumulate("password", password.getText().toString());
+
+                        Response.Listener<JSONObject> listener = new Response.Listener<JSONObject>() {
+                            @Override
+                            public void onResponse(JSONObject response) {
+                                System.out.println(response.toString());
+                                try{
+                                    if(response.getBoolean("newusercreated")){
+                                        //Todo show otp dialog
+                                        System.out.println("check 1");
+                                        dismissProcessDialog();
+                                        dialog.dismiss();
+                                        System.out.println("check 2");
+                                        createOTPDialog(facebookLoginDetails.getString("mobile"));
+                                        System.out.println("check 3");
+                                    }
+                                    else{
+                                        //do nothing
+                                        dialog.dismiss();
+                                    }
+                                }catch(Exception e){
+                                    Log.e("EXCEPTION", e.getMessage());
+                                }
+                            }
+                        };
+
+                        volleyRequests(facebookLoginDetails,"http://www.hoi.co.in/enduser/signupuser" ,listener);
 
                         //Todo check if signup succeeded
-                        new UserLoginTask(email.getText().toString(),password.getText().toString()).execute();
+                        //new UserLoginTask(email.getText().toString(),password.getText().toString()).execute();
 
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        });
+        Log.d("SIGNUP_DIALOG", "Sign up dialog created");
+    }
+
+    public void createOTPDialog(final String phone){
+        //
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+
+        // Get the layout inflater
+        LayoutInflater inflater = this.getLayoutInflater();
+        View dView = inflater.inflate(R.layout.otp_dialog, null);
+
+        final EditText otp = (EditText)dView.findViewById(R.id.otp);
+
+
+        // Add the buttons
+        builder.setView(dView)
+                // Add action buttons
+                .setPositiveButton(R.string.submit, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int id) {}
+                })
+                .setNegativeButton(R.string.resend, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                    }
+                });
+        // Set other dialog properties
+        // Create the AlertDialog
+        final AlertDialog dialog = builder.create();
+        dialog.show();
+
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (otp.getText().toString().isEmpty()) {
+                    otp.setError("No Code entered");
+                } else {
+                   //Todo send otp using volley and resend if otp mismatch
+                    Response.Listener<JSONObject> listener = new Response.Listener<JSONObject>() {
+                        @Override
+                        public void onResponse(JSONObject response) {
+                            try{
+                                if(response.getBoolean("response")){
+
+                                    mAuthTask = new UserLoginTask(facebookLoginDetails.getString("email"), facebookLoginDetails.getString("password"));
+                                    startProcessDialog();
+                                    String res = mAuthTask.execute((Void) null).get();
+                                    dismissProcessDialog();
+                                    dialog.dismiss();
+                                }
+                                else{
+
+                                    otp.setError("OTP mismatch");
+                                }
+                            }catch(Exception e){
+                                Log.e("EXCEPTION", e.getMessage());
+                            }
+                        }
+                    };
+                    try {
+                        volleyRequests(new JSONObject().accumulate("otp",otp.getText().toString()), "http://www.hoi.co.in/enduser/confirmphone/"+phone,
+                                listener);
                     } catch (JSONException e) {
                         e.printStackTrace();
                     }
@@ -474,7 +800,26 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
                 }
             }
         });
-        Log.d("SIGNUP_DIALOG", "Sign up dialog created");
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Response.Listener<JSONObject> listener = new Response.Listener<JSONObject>() {
+                    @Override
+                    public void onResponse(JSONObject response) {
+                        try {
+                            if (!response.getBoolean("response")) {
+                                Toast.makeText(LoginActivity.this.getApplicationContext(), "OTP not sent!", Toast.LENGTH_LONG).show();
+                            }
+                        } catch (Exception e) {
+                            Log.e("EXCEPTION", e.getMessage());
+                        }
+                    }
+                };
+                volleyRequests(new JSONObject(), "http://www.hoi.co.in/enduser/resendOTP/" + phone,
+                        listener);
+            }
+        });
+
     }
 
     private void startProcessDialog(){
@@ -587,6 +932,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
                 try {
                     jObject = new JSONObject(data);
                     if (jObject.getInt("code") == 1) {
+                        prefs.edit().clear().commit();
                         prefs.edit().putString("username", mEmail);
                         prefs.edit().putString("password", mPassword);
                         prefs.edit().commit();
@@ -598,6 +944,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
 
                         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                         getApplicationContext().startActivity(intent);
+                        LoginActivity.this.finish();
 
 
                     } else if ((jObject.getInt("code") == 5)) {
@@ -626,6 +973,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
                     }
 
                 } catch (JSONException e) {
+                    mPasswordView.setError(getString(R.string.error_incorrect_password));
                     e.printStackTrace();
                 }
                 asyncDialog.dismiss();
@@ -682,77 +1030,29 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
         }
     }
 
-    public class FacebookSignUpTask extends AsyncTask<Void, Void, String> {
-        private HttpResponse response;
-
-        ProgressDialog asyncDialog = new ProgressDialog(LoginActivity.this);
-
-        @Override
-        protected String doInBackground(Void... params) {
-
-            try {
-                HttpPost request = new HttpPost("http://www.hoi.co.in/enduser/signupuser");
-                request.setEntity(new StringEntity(facebookLoginDetails.toString()));
-
-                HttpClient httpclient = new DefaultHttpClient();
-                try {
-                    response = httpclient.execute(request);
-
-                } catch (ClientProtocolException e) {
-                    e.printStackTrace();
+    private void volleyRequests(JSONObject data, String url, Response.Listener<JSONObject> listener){
+        System.out.println(data.toString());
+        System.out.println(url);
+        Response.ErrorListener errorListener = new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                if(error != null){
+                    Log.e("EXCEPTION", error.toString());
                 }
-
-            } catch (IOException e) {
-                e.printStackTrace();
+                Log.e("EXCEPTION", "Exception occured in volley");
             }
+        };
 
-            InputStream inputStream = null;
-            String result = null;
-            try {
-                HttpEntity entity = response.getEntity();
+        JsonObjectRequest request = new JsonObjectRequest(Request.Method.POST,
+                url,
+                data,
+                listener,
+                errorListener
+        );
+        int socketTimeout = 30000;//30 seconds - change to what you want
+        RetryPolicy policy = new DefaultRetryPolicy(socketTimeout, DefaultRetryPolicy.DEFAULT_MAX_RETRIES, DefaultRetryPolicy.DEFAULT_BACKOFF_MULT);
+        request.setRetryPolicy(policy);
 
-                inputStream = entity.getContent();
-                // json is UTF-8 by default
-                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"), 8);
-                StringBuilder sb = new StringBuilder();
-
-                String line = null;
-                while ((line = reader.readLine()) != null) {
-                    sb.append(line + "\n");
-                }
-                result = sb.toString();
-            } catch (Exception e) {
-                Log.d("Exception: ", e.getMessage());
-            } finally {
-                try {
-                    if (inputStream != null) inputStream.close();
-                } catch (Exception squish) {
-                }
-            }
-
-            return result;
-        }
-
-        @Override
-        protected void onPostExecute(final String data) {
-            mAuthTask = null;
-            asyncDialog.dismiss();
-            System.out.println(data);
-            super.onPostExecute(data);
-        }
-
-        @Override
-        protected void onPreExecute() {
-            //set message of the dialog
-            asyncDialog.setMessage(getString(R.string.login_attempt));
-            //show dialog
-            asyncDialog.show();
-            super.onPreExecute();
-        }
-
-        @Override
-        protected void onCancelled() {
-            mAuthTask = null;
-        }
+        MainApplication.getInstance().getRequestQueue().add(request);
     }
 }

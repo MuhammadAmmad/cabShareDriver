@@ -13,6 +13,7 @@ import android.view.ViewGroup;
 import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import java.io.InputStream;
 
@@ -61,7 +62,7 @@ public class FragmentMain extends Fragment {
                 c1.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                        ((MainActivity)getActivity()).createRatingDialog(getArguments().getString("url1"));
+                        ((MainActivity)getActivity()).createRatingDialog(getArguments().getString("url1"), 0);
                     }
                 });
                 new DownloadImageTask(c1).execute(getArguments().getString("url1"));
@@ -71,7 +72,7 @@ public class FragmentMain extends Fragment {
                 c2.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                        ((MainActivity)getActivity()).createRatingDialog(getArguments().getString("url2"));
+                        ((MainActivity)getActivity()).createRatingDialog(getArguments().getString("url2"), 1);
                     }
                 });
                 new DownloadImageTask(c2).execute(getArguments().getString("url2"));
@@ -81,7 +82,7 @@ public class FragmentMain extends Fragment {
                 c3.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                        ((MainActivity)getActivity()).createRatingDialog(getArguments().getString("url3"));
+                        ((MainActivity)getActivity()).createRatingDialog(getArguments().getString("url3"), 2);
                     }
                 });
                 new DownloadImageTask(c3).execute(getArguments().getString("url3"));
@@ -91,7 +92,7 @@ public class FragmentMain extends Fragment {
                 c4.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                        ((MainActivity)getActivity()).createRatingDialog(getArguments().getString("url4"));
+                        ((MainActivity)getActivity()).createRatingDialog(getArguments().getString("url4"), 3);
                     }
                 });
                 new DownloadImageTask(c4).execute(getArguments().getString("url4"));
@@ -119,6 +120,21 @@ public class FragmentMain extends Fragment {
         else if(awaitingRide){
             //Todo put driver details
             view = inflater.inflate(R.layout.fragment_awatingride, container, false);
+            TextView carMake = (TextView) view.findViewById(R.id.car_make);
+            TextView carNo = (TextView) view.findViewById(R.id.car_no);
+            carMake.setText(getArguments().getString("carmodel"));
+            carNo.setText(getArguments().getString("carno"));
+
+            TextView driverName = (TextView) view.findViewById(R.id.driver_name);
+            TextView driverNo = (TextView) view.findViewById(R.id.driver_moblie);
+            driverName.setText(getArguments().getString("drivername"));
+            driverNo.setText(getArguments().getString("drivermobile"));
+
+            de.hdodenhof.circleimageview.CircleImageView driverpic =
+                    (de.hdodenhof.circleimageview.CircleImageView) view.findViewById(R.id.driver_pic);
+            //new DownloadImageTask(driverpic).execute(getArguments().getString("driverpic"));
+
+
         }
         else {
             view = inflater.inflate(R.layout.fragment_bookingride, container, false);

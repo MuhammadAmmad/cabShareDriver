@@ -8,14 +8,21 @@ import org.json.JSONObject;
  * Created by Ujjwal on 28-06-2015.
  */
 public class TransactionItem {
+
     int id;
     double amount;
     String status;
     int userId;
-    String debitType;
+    String detail;
+
     int genRideRequestId;
     int rideRequestId;
     int cancellationId;
+
+    int voucherId;
+    int creditpgId;
+    int cancellationRequestId;
+
     String recordDateTime;
 
     TransactionItem(JSONObject jData){
@@ -24,8 +31,14 @@ public class TransactionItem {
             amount = jData.getDouble("amount");
             status = jData.getString("status");
             userId = jData.getInt("userID");
-            debitType = jData.getString("debittype");
 
+            if(jData.has("debittype")){
+                detail = jData.getString("debittype");
+            }else{
+                detail = jData.getString("credittype");
+            }
+
+             /*
             if(jData.has("genriderequestid")) genRideRequestId = jData.getInt("genriderequestid");
             else genRideRequestId = 0;
 
@@ -35,6 +48,17 @@ public class TransactionItem {
             if(jData.has("cancellationID")) cancellationId = jData.getInt("cancellationID");
             else cancellationId = 0;
 
+            if(jData.has("voucherID")) voucherId = jData.getInt("voucherID");
+            else voucherId = 0;
+
+
+            if(jData.has("creditpgID"))creditpgId = jData.getInt("creditpgID");
+            else creditpgId = 0;
+
+
+            if(jData.has("cancellationRequestID")) cancellationRequestId = jData.getInt("cancellationRequestID");
+            else cancellationRequestId = 0;
+               */
             if(jData.has("recorddatetime"))recordDateTime = jData.getString("recorddatetime");
             else recordDateTime = "";
 

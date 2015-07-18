@@ -13,6 +13,9 @@
             android:layout_alignParentBottom="true"
             android:layout_alignParentLeft="true"
             android:id="@+id/linearLayout">
+
+
+
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="match_parent"
@@ -20,37 +23,67 @@
                 <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="0.3"
+                    android:layout_weight="0.25"
                     android:orientation="vertical">
                     <de.hdodenhof.circleimageview.CircleImageView
                         android:layout_width="70dp"
                         android:layout_height="70dp"
                         android:src="@drawable/user1"
-                        android:layout_marginLeft="16dp"
-                        android:id="@+id/circleView"
+                        android:layout_marginLeft="10dp"
+                        android:id="@+id/driver_pic"
                         />
                 </LinearLayout>
-
-
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="0.5"
+                <LinearLayout android:layout_width="fill_parent"
+                    android:layout_height="fill_parent"
                     android:orientation="vertical"
-                    android:padding="10dp">
+                    android:paddingLeft="20dp"
+                    android:paddingRight="10dp"
+                    android:layout_weight="0.4"
+                    android:background="@drawable/greybackground"
+                    >
                     <TextView
+                        android:id="@+id/driver_name"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:padding="5dp"
+                        android:background="#f3f3f3"
+                        android:layout_gravity="center"
+                        android:text="Driver Name"/>
+                    <TextView
+                        android:id="@+id/driver_moblie"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_gravity="center"
-                        android:text="Name"/>
-                    <LinearLayout
-                        android:layout_width="wrap_content"
-                        android:layout_height="5dp"></LinearLayout>
+                        android:padding="5dp"
+                        android:background="#f3f3f3"
+                        android:text="08826235246" />
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="fill_parent"
+                    android:layout_height="fill_parent"
+                    android:orientation="vertical"
+                    android:layout_weight="0.35"
+                    android:paddingLeft="20dp"
+                    android:paddingRight="10dp"
+                    android:background="@drawable/greybackground"
+                    >
                     <TextView
+                        android:id="@+id/car_make"
+                        android:padding="5dp"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:background="#f3f3f3"
                         android:layout_gravity="center"
-                        android:text="+91 8826235246" />
+                        android:text="Maruti Swift"/>
+
+                    <TextView
+                        android:id="@+id/car_no"
+                        android:layout_width="wrap_content"
+                        android:padding="5dp"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:background="#f3f3f3"
+                        android:text="08826235246" />
                 </LinearLayout>
 
             </LinearLayout>

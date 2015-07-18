@@ -44,8 +44,8 @@ public class WalletListAdapter  extends BaseAdapter implements View.OnClickListe
     }
 
     @Override
-    public SavedPlaceItem getItem(int position) {
-        return null;
+    public TransactionItem getItem(int position) {
+        return data.get(position);
     }
 
     @Override
@@ -56,9 +56,9 @@ public class WalletListAdapter  extends BaseAdapter implements View.OnClickListe
     /********* Create a holder Class to contain inflated xml file elements *********/
     public static class ViewHolder{
 
-        public TextView text1;
-        public TextView text2;
-
+        public TextView amount;
+        public TextView detail;
+        public TextView time;
     }
 
     @Override
@@ -70,13 +70,14 @@ public class WalletListAdapter  extends BaseAdapter implements View.OnClickListe
         if(convertView==null){
 
             /****** Inflate tabitem.xml file for each row ( Defined below ) *******/
-            v = inflater.inflate(R.layout.listitem, null);
+            v = inflater.inflate(R.layout.wallet_list_item, null);
 
             /****** View Holder Object to contain tabitem.xml file elements ******/
 
             holder = new ViewHolder();
-            holder.text1=(TextView)v.findViewById(R.id.address_primary);
-            holder.text2 = (TextView) v.findViewById(R.id.address_secondary);
+            holder.amount=(TextView)v.findViewById(R.id.trans_cost);
+            holder.detail = (TextView) v.findViewById(R.id.trans_detail);
+            holder.time=(TextView)v.findViewById(R.id.trans_time);
 
             /************  Set holder with LayoutInflater ************/
             v.setTag( holder );
@@ -91,10 +92,10 @@ public class WalletListAdapter  extends BaseAdapter implements View.OnClickListe
             tempValues = ( TransactionItem ) data.get( position );
 
             /************  Set Model values in Holder elements ***********/
-
-            //holder.text1.setText( tempValues.getAddress1() );
-            //holder.text2.setText( tempValues.getAddress2() );
-
+            System.out.println(tempValues.detail + tempValues.recordDateTime + tempValues.amount);
+            holder.detail.setText(tempValues.detail);
+            holder.time.setText(tempValues.recordDateTime);
+            holder.amount.setText(res.getString(R.string.Rs)+" "+tempValues.amount);
             v.setOnClickListener(new OnItemClickListener( position ));
         }
         return v;
@@ -114,13 +115,7 @@ public class WalletListAdapter  extends BaseAdapter implements View.OnClickListe
 
         @Override
         public void onClick(View arg0) {
-
-
-            SearchActivity sct = (SearchActivity) activity;
-
-            /****  Call  onItemClick Method inside CustomListViewAndroidExample Class ( See Below )****/
-
-            sct.onItemClick(mPosition);
+            //Todo show the details of transaction
         }
     }
 }

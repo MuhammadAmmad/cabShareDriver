@@ -7,6 +7,9 @@ import android.content.pm.Signature;
 import android.util.Base64;
 import android.util.Log;
 
+import com.android.volley.RequestQueue;
+import com.android.volley.toolbox.Volley;
+
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
@@ -14,10 +17,24 @@ import java.security.NoSuchAlgorithmException;
  * Created by Ujjwal on 04-07-2015.
  */
 public class MainApplication extends Application {
+
+    private static MainApplication sInstance;
+    private RequestQueue mRequestQueue;
+
     @Override
     public void onCreate() {
         super.onCreate();
+        mRequestQueue = Volley.newRequestQueue(this);
+        sInstance = this;
         printHashKey();
+    }
+
+    public synchronized static MainApplication getInstance() {
+        return sInstance;
+    }
+
+    public RequestQueue getRequestQueue() {
+        return mRequestQueue;
     }
 
     public void printHashKey(){

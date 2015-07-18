@@ -27,6 +27,7 @@ public class DetailCurrentRide {
     public DetailCurrentRide(JSONObject rideInfo){
         try {
             bookingTime = rideInfo.getString("bookingtime");
+            bookingTime = bookingTime.replace(bookingTime.substring(bookingTime.length()-5),"");
             sourceCoordinates = new LatLng(rideInfo.getDouble("originx"),rideInfo.getDouble("originy"));
             destinationCoordinates = new LatLng(rideInfo.getDouble("corx"),rideInfo.getDouble("cory"));
 

@@ -1,15 +1,19 @@
 package in.co.hoi.cabshare;
 
 
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TabHost;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import org.apache.commons.codec.DecoderException;
 import org.apache.http.HttpEntity;
@@ -21,6 +25,8 @@ import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.message.BasicNameValuePair;
+import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -32,7 +38,6 @@ import java.security.InvalidKeyException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
@@ -45,6 +50,7 @@ import javax.crypto.IllegalBlockSizeException;
 public class FragmentWallet extends Fragment{
     String authenticationHeader;
     List<TransactionItem> transactionList;
+    Double balance;
 
     public static final String AUTH_HEAD = "authenticationheader";
     private final static String BASE_SERVER_URL = "http://www.hoi.co.in/api/";
@@ -56,6 +62,7 @@ public class FragmentWallet extends Fragment{
 
         View view = inflater.inflate(R.layout.fragment_wallet, container, false);
         authenticationHeader = getArguments().getString(AUTH_HEAD);
+        balance = getArguments().getDouble("balance");
         TabHost tabs = (TabHost)view.findViewById(R.id.tabHost);
         tabs.setup();
 
@@ -64,6 +71,9 @@ public class FragmentWallet extends Fragment{
         walletTab.setContent(R.id.wallet);
         walletTab.setIndicator("Wallet");
         tabs.addTab(walletTab);
+
+        TextView remBalance = (TextView) view.findViewById(R.id.remaining_balance);
+        remBalance.setText(""+balance);
 
         // Credit
         TabHost.TabSpec creditTab = tabs.newTabSpec("credit");
@@ -79,28 +89,93 @@ public class FragmentWallet extends Fragment{
 
         //Populate credits list
         ListView creditlv = (ListView) view.findViewById(R.id.credits_list);
-        ListView debitlv = (ListView) view.findViewById(R.id.credits_list);
-        populateList("credits", creditlv);
-        populateList("debits", debitlv);
+        ListView debitlv = (ListView) view.findViewById(R.id.debits_list);
+        try {
+            populateList("credits", creditlv);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
 
+        try {
+            populateList("debits", debitlv);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        //Voucher Code
+        TextView voucher = (TextView) view.findViewById(R.id.voucher);
+        voucher.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
+
+                // Get the layout inflater
+                LayoutInflater inflater = getActivity().getLayoutInflater();
+                View dView = inflater.inflate(R.layout.voucher_dialog, null);
+
+                final EditText voucherCode = (EditText)dView.findViewById(R.id.voucher);
+
+
+                // Add the buttons
+                builder.setView(dView)
+                        // Add action buttons
+                        .setPositiveButton(R.string.submit, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int id) {}
+                        })
+                        .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int id) {
+                                //nothing to be done when user cancels his action
+                            }
+                        });
+                // Set other dialog properties
+                // Create the AlertDialog
+                final AlertDialog dialog = builder.create();
+                dialog.show();
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        if (voucherCode.getText().toString().isEmpty()) {
+                            voucherCode.setError("No Code entered");
+                        } else {
+                            try {
+                                String res = new HttpPostTask().execute(BASE_SERVER_URL + "applyvoucher/" + voucherCode.getText()).get();
+                                Toast.makeText(getActivity().getApplicationContext(),res,Toast.LENGTH_LONG).show();
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            } catch (ExecutionException e) {
+                                e.printStackTrace();
+                            }
+                            dialog.dismiss();
+                        }
+                    }
+                });
+            }
+        });
         return view;
     }
 
-    private void populateList(String type, ListView lv){
+    private void populateList(String type, ListView lv) throws JSONException {
         transactionList = new ArrayList<TransactionItem>();
-        TransactionListRequest transactionListRequest = new TransactionListRequest();
+        HttpPostTask transactionListRequest = new HttpPostTask();
+        String res = "";
         try {
-            String res = transactionListRequest.execute(BASE_SERVER_URL+type).get();
+            res = transactionListRequest.execute(BASE_SERVER_URL+type).get();
         } catch (InterruptedException e) {
             e.printStackTrace();
         } catch (ExecutionException e) {
             e.printStackTrace();
         }
+        JSONArray jsonArray = new JSONArray(res);
+        for(int i = 0; i < jsonArray.length() ; i++){
+            TransactionItem tmp = new TransactionItem((JSONObject) jsonArray.get(i));
+            transactionList.add(tmp);
+        }
         WalletListAdapter walletAdapter = new WalletListAdapter(getActivity(), transactionList, getResources());
         lv.setAdapter(walletAdapter);
     }
 
-    private class TransactionListRequest extends AsyncTask<String, Void, String> {
+    private class HttpPostTask extends AsyncTask<String, Void, String> {
 
         private HttpResponse response;
 
@@ -169,17 +244,6 @@ public class FragmentWallet extends Fragment{
             }
             finally {
                 try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
-            }
-            JSONObject jObject;
-
-            try {
-                jObject = new JSONObject(result);
-                Iterator iterator = jObject.keys();
-                while(iterator.hasNext()){
-
-                }
-            } catch (Exception e) {
-                Log.d("Exception", e.toString());
             }
             return result;
         }

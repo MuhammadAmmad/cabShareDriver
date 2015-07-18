@@ -11,7 +11,6 @@ import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
-import android.graphics.drawable.BitmapDrawable;
 import android.location.Address;
 import android.location.Criteria;
 import android.location.Geocoder;
@@ -34,7 +33,6 @@ import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.GestureDetector;
-import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -43,10 +41,10 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.ListView;
-import android.widget.PopupWindow;
+import android.widget.RatingBar;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -83,6 +81,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.security.InvalidKeyException;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -140,6 +139,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
     private int cabArrivalDuration;
     private int cabDistanceAway;
     CabBookingDetails cabBookingDetails;
+    private Double balance;
 
     /*
      * Miscellaneous variables
@@ -150,7 +150,6 @@ public class MainActivity extends ActionBarActivity implements android.location.
     Timer timer;
     TimerTask timerTask;
     final Handler handler = new Handler();
-    Double cabDetailsRequestTime;
     int defaultView = 1;
     View fragmentMainView;
     View fragmentWalletView;
@@ -161,6 +160,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
      */
     private float billingRate = 10f;
     private int stateCounter = 0;
+    private double currentRideFare = 0.0;
 
     /*
      * variable for user and driver rating
@@ -183,11 +183,9 @@ public class MainActivity extends ActionBarActivity implements android.location.
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
 
-        startProcessDialog("Loading Profile Data...");
-
         prefs= ObscuredSharedPreferences.getPrefs(this, "Hoi Cabs", Context.MODE_PRIVATE);
-        String TITLES[] = {"Home","Wallet","Contact Us","Complaint","LogOut"};
-        int ICONS[] = {R.drawable.ic_home,R.drawable.ic_wallet,R.drawable.ic_contact,R.drawable.ic_comp,R.drawable.ic_favorite};
+        String TITLES[] = {"Home","Wallet","Change Password","Contact Us","Complaint","LogOut"};
+        int ICONS[] = {R.drawable.ic_home,R.drawable.ic_wallet,R.drawable.ic_edit,R.drawable.ic_contact,R.drawable.ic_comp,R.drawable.ic_logout};
 
         try {
 
@@ -198,6 +196,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
             awaitingRide = userData.getBoolean("awaitingride");
             ratingPending = userData.getBoolean("hastorateprevious");
             rideRequestId  = userData.getInt("genriderequestid");
+            balance = userData.getDouble("availableinr");
 
             if(getIntent().hasExtra("authenticationHeader"))
                 authenticationHeader = getIntent().getStringExtra("authenticationHeader");
@@ -210,11 +209,23 @@ public class MainActivity extends ActionBarActivity implements android.location.
          * Updating the user state if user already booked the ride
          */
         if(inRide || awaitingRide){
-            RideRequestInfo rideRequestInfo = new RideRequestInfo();
+            HttpRequestTask rideRequestInfo = new HttpRequestTask();
             try {
                 Log.d("CODE_FLOW", "CAB DETAILS_REQESTED");
                 String res = rideRequestInfo.execute("http://www.hoi.co.in/api/riderequestinfo/"+rideRequestId).get();
-                cabDetailsRequestTime = System.currentTimeMillis()/60000.0;
+                System.out.println(res);
+                JSONObject jObject, genRideRequestInfo, rideResponceInfo;
+                try {
+                    jObject = new JSONObject(res);
+                    genRideRequestInfo = jObject.getJSONObject("grri");
+                    rideResponceInfo = jObject.getJSONObject("rrd");
+                    currentRideDetails = new DetailCurrentRide(genRideRequestInfo);
+                    carDetails = new DetailCar(rideResponceInfo.getJSONObject("carinfo"));
+                    driverDetails = new DetailDriver(jObject);
+                    cabLatestCoordinate = new LatLng(rideResponceInfo.getDouble("ridelastlong"), rideResponceInfo.getDouble("ridelastlat"));
+                } catch (Exception e) {
+                    Log.d("Exception", e.toString());
+                }
                 Log.d("CODE_FLOW", "CAB DETAILS_RECEIVED");
             } catch (InterruptedException e) {
                 e.printStackTrace();
@@ -299,7 +310,6 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
         Drawer.setDrawerListener(mDrawerToggle); // Drawer Listener set to the Drawer toggle
         mDrawerToggle.syncState();               // Finally we set the drawer toggle sync State
-        dismissProcessDialog();
     }
 
     private boolean checkForConnectivity(){
@@ -356,28 +366,33 @@ public class MainActivity extends ActionBarActivity implements android.location.
                     break;
             case 2: setUpWallet();
                     break;
-            case 3: setUpContact();
+            case 3: createChangePassDialog();
+                    break; //Todo change password dialog
+            case 4: setUpContact();
                     break;
-            case 4: break;
-            case 5: applicationLogout();
+            case 5: break;
+            case 6: applicationLogout();
                     break;
         }
     }
 
-    public void createRatingDialog(String url){
+    private void createChangePassDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
 
         // Get the layout inflater
         LayoutInflater inflater = this.getLayoutInflater();
-        View dView = inflater.inflate(R.layout.rating_dialog, null);
+        View dView = inflater.inflate(R.layout.dialog_changepass, null);
         // Add the buttons
+
+        final EditText oldPass = (EditText) dView.findViewById(R.id.old_pass);
+        final EditText newPass = (EditText) dView.findViewById(R.id.new_pass);
+        final EditText confPass = (EditText) dView.findViewById(R.id.confirm_pass);
 
         builder.setView(dView)
                 // Add action buttons
                 .setPositiveButton(R.string.submit, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int id) {
-                        // todo when user rates another user
                     }
                 })
                 .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
@@ -388,6 +403,98 @@ public class MainActivity extends ActionBarActivity implements android.location.
         // Set other dialog properties
         // Create the AlertDialog
         AlertDialog dialog = builder.create();
+        dialog.show();
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String res = "Password not changed";
+                if (oldPass.getText().toString().isEmpty()) {
+                    oldPass.setError("No Password Entered");
+                } else if (oldPass.getText().toString().equals(prefs.getString("password", ""))) {
+                    oldPass.setError("Password Mismatch with Old Password");
+                } else if (newPass.getText().toString().isEmpty()) {
+                    newPass.setError("No Password Entered");
+                } else if (!newPass.getText().toString().equals(confPass.getText().toString())) {
+                    confPass.setError("Password Mismatch");
+                } else {
+                    JSONObject data = new JSONObject();
+                    try {
+
+                        data.accumulate("password", newPass.getText().toString());
+                        res = new HttpRequestTask(data).execute(BASE_SERVER_URL + "updatepassword/" + userDetails.phone).get();
+
+                        Toast.makeText(MainActivity.this, res, Toast.LENGTH_LONG).show();
+                            Intent intent = new Intent(MainActivity.this, LoginActivity.class);
+                            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            getApplicationContext().startActivity(intent);
+                            MainActivity.this.finish();
+                    } catch (Exception e) {
+                        Log.e("EXCEPTION", e.getMessage());
+                    }
+                }
+            }
+        });
+    }
+
+    public void createRatingDialog(String url, final int passenger){
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+
+        // Get the layout inflater
+        LayoutInflater inflater = this.getLayoutInflater();
+        View dView = inflater.inflate(R.layout.dialog_rating, null);
+        final RatingBar rating = (RatingBar) dView.findViewById(R.id.rating_bar);
+        // Add the buttons
+
+        builder.setView(dView)
+                // Add action buttons
+                .setPositiveButton(R.string.submit, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int id) {
+                        new HttpRequestTask().execute(BASE_SERVER_URL +"rateuser/" + rideRequestId + "/" + coPassengers.get(passenger).id
+                                + "/" + rating.getRating());
+                    }
+                })
+                .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        //nothing to be done when user cancels his action
+                    }
+                });
+        // Set other dialog properties
+        // Create the AlertDialog
+        AlertDialog dialog = builder.create();
+        dialog.setTitle("Rate Co-Passengers");
+        de.hdodenhof.circleimageview.CircleImageView pic = (de.hdodenhof.circleimageview.CircleImageView)
+                dView.findViewById(R.id.co_passenger_dp);
+        new DownloadImageTask(pic).execute(url).execute();
+        dialog.show();
+    }
+
+    public void driverRatingDialog(String url){
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+
+        // Get the layout inflater
+        LayoutInflater inflater = this.getLayoutInflater();
+        View dView = inflater.inflate(R.layout.dialog_rating, null);
+        final RatingBar rating = (RatingBar) dView.findViewById(R.id.rating_bar);
+        // Add the buttons
+
+        builder.setView(dView)
+                // Add action buttons
+                .setPositiveButton(R.string.submit, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int id) {
+
+                    }
+                })
+                .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        //nothing to be done when user cancels his action
+                    }
+                });
+        // Set other dialog properties
+        // Create the AlertDialog
+        AlertDialog dialog = builder.create();
+        dialog.setTitle("Rate Driver");
         de.hdodenhof.circleimageview.CircleImageView pic = (de.hdodenhof.circleimageview.CircleImageView)
                 dView.findViewById(R.id.co_passenger_dp);
         new DownloadImageTask(pic).execute(url).execute();
@@ -401,6 +508,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
         LayoutInflater inflater = this.getLayoutInflater();
         View dView = inflater.inflate(R.layout.ride_summary_dialog, null);
         builder.setView(dView);
+        final RatingBar rating = (RatingBar) dView.findViewById(R.id.rating_bar);
         // Set other dialog properties
         // Create the AlertDialog
         final AlertDialog dialog = builder.create();
@@ -432,6 +540,8 @@ public class MainActivity extends ActionBarActivity implements android.location.
         dialogClose.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                if(rating.getRating() != 0)
+                    new HttpRequestTask().execute(BASE_SERVER_URL +"ratedriver/" + rideRequestId + "/" + rating.getRating());
                 dialog.dismiss();
                 //Todo show the pending rating dialog to user
             }
@@ -564,71 +674,48 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
     public void showCabRates(View view){
 
-        // Inflate the popup_layout.xml
-        LinearLayout viewGroup = (LinearLayout) this.findViewById(R.id.popup);
-        LayoutInflater layoutInflater = (LayoutInflater) this
-                .getSystemService(this.LAYOUT_INFLATER_SERVICE);
-        View layout = layoutInflater.inflate(R.layout.popup_layout, viewGroup);
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
 
-        layout.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        // Get the layout inflater
+        LayoutInflater inflater = this.getLayoutInflater();
+        View dView = inflater.inflate(R.layout.popup_layout, null);
+        builder.setView(dView);
 
-        // Creating the PopupWindow
-        final PopupWindow popup = new PopupWindow(this);
-        popup.setContentView(layout);
-        popup.setWidth(layout.getMeasuredWidth());
-        popup.setHeight(layout.getMeasuredHeight());
-        popup.setFocusable(true);
+        final AlertDialog dialog = builder.create();
 
-        // Some offset to align the popup a bit to the right, and a bit down, relative to button's position.
-        int OFFSET_X = 30;
-        int OFFSET_Y = 30;
-
-        // Clear the default translucent background
-        popup.setBackgroundDrawable(new BitmapDrawable());
-
-        // Displaying the popup at the specified location, + offsets.
-        popup.showAtLocation(layout, Gravity.CENTER, 0, 0);
-
-        // Getting a reference to Close button, and close the popup when clicked.
-        Button close = (Button) layout.findViewById(R.id.close_popup);
-        close.setOnClickListener(new View.OnClickListener() {
-
+        Button dialogClose = (Button) dView.findViewById(R.id.close_popup);
+        dialogClose.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                popup.dismiss();
+                dialog.dismiss();
+                //Todo show the pending rating dialog to user
             }
         });
+        dialog.show();
     }
 
-    public void sendMessageSource(View view)
-    {
-        if(awaitingRide){
-            TrackRideTask trackRide = new TrackRideTask(authenticationHeader);
-            trackRide.execute("http://www.hoi.co.in/api/track/"+rideRequestId);
-        }
+    public void sendMessageSource(View view) {
+
+        if (currentLocationCoordinate == null)
+            Toast.makeText(getApplicationContext(), "Please wait!! Searching current location",
+                    Toast.LENGTH_LONG).show();
         else {
-            if (currentLocationCoordinate == null)
-                Toast.makeText(getApplicationContext(), "Please wait!! Searching current location",
-                        Toast.LENGTH_LONG).show();
-            else {
-                if (sourceMarker != null) sourceMarker.remove();
-                Intent intent = new Intent(MainActivity.this, SearchActivity.class);
-                intent.putExtra("Location", "S");
-                intent.putExtra("CurrentLatitude", Double.toString(currentLocationCoordinate.latitude));
-                intent.putExtra("CurrentLongitude", Double.toString(currentLocationCoordinate.longitude));
-                String[] str = {"Home", "Office", "Favorite1", "Favorite2", "Favorite3"};
-                for(int i = 0 ; i < 5 ; i ++){
-                    if(prefs.contains(str[i])){
-                        try{
-                            JSONObject jsonObject = new JSONObject(prefs.getString(str[i],null));
-                            if(jsonObject != null) intent.putExtra(str[i], jsonObject.toString());
-                        }catch (JSONException e){
-                        }
+            if (sourceMarker != null) sourceMarker.remove();
+            Intent intent = new Intent(MainActivity.this, SearchActivity.class);
+            intent.putExtra("Location", "S");
+            intent.putExtra("CurrentLatitude", Double.toString(currentLocationCoordinate.latitude));
+            intent.putExtra("CurrentLongitude", Double.toString(currentLocationCoordinate.longitude));
+            String[] str = {"Home", "Office", "Favorite1", "Favorite2", "Favorite3"};
+            for (int i = 0; i < 5; i++) {
+                if (prefs.contains(str[i])) {
+                    try {
+                        JSONObject jsonObject = new JSONObject(prefs.getString(str[i], null));
+                        if (jsonObject != null) intent.putExtra(str[i], jsonObject.toString());
+                    } catch (JSONException e) {
                     }
                 }
-
-                startActivityForResult(intent, 2);
             }
+            startActivityForResult(intent, 2);
         }
     }
 
@@ -667,19 +754,15 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        System.out.println("check1");
         super.onActivityResult(requestCode, resultCode, data);
 
         if (resultCode != RESULT_CANCELED) {
             Bundle bundle = data.getExtras();
 
-            System.out.println("check2");
             Double latitude = Double.parseDouble(bundle.getString("latitude"));
-            System.out.println("check3");
             Double longitude = Double.parseDouble(bundle.getString("longitude"));
             IconGenerator iconFactory = new IconGenerator(this);
 
-            System.out.println("check4");
             // check if the request code is same as what is passed  here it is 2
             if (requestCode == 2) {
                 iconFactory.setColor(Color.GREEN);
@@ -715,6 +798,12 @@ public class MainActivity extends ActionBarActivity implements android.location.
         args.putBoolean("awaitingride", awaitingRide);
         args.putBoolean("inRide", inRide);
         args.putBoolean("ratindpending", ratingPending);
+        args.putString("drivername",driverDetails.name);
+        args.putString("driverpic",driverDetails.picURL);
+        args.putString("drivermobile",driverDetails.phone);
+        args.putString("carno",carDetails.regNumber);
+        args.putString("carmodel",carDetails.model + " " + carDetails.make);
+
 
         displayFragment.setArguments(args);
 
@@ -759,11 +848,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
         }
 
         //Getting copassenger details
-        CoPassengerInfo coPassengerInfoTask = new CoPassengerInfo();
-
-        Log.d("CODE_FLOW", "REQUEST FOR CO PASSENGER INFO");
-        String res = coPassengerInfoTask.execute(BASE_SERVER_URL+"copassengerinfo/"+rideRequestId).get();
-        Log.d("CODE_FLOW", "RECEIVED CO PASSENGER INFO");
+        getCopassengerInfo();
 
         Fragment displayFragment = new FragmentMain();
         FragmentManager fm = getSupportFragmentManager();
@@ -785,6 +870,39 @@ public class MainActivity extends ActionBarActivity implements android.location.
         setTitle("In Ride");
     }
 
+    private void getCopassengerInfo() throws ExecutionException, InterruptedException {
+        HttpRequestTask coPassengerInfoTask = new HttpRequestTask();
+
+        Log.d("CODE_FLOW", "REQUEST FOR CO PASSENGER INFO");
+        String res = coPassengerInfoTask.execute(BASE_SERVER_URL+"copassengerinfo/"+rideRequestId).get();
+        JSONObject jObject;
+        try{
+            jObject = new JSONObject(res);
+            Log.d("DATA_CO_PASSENGER_INFO", res);
+            coPassengers = new ArrayList<CoPassenger>();
+
+            if(jObject.getInt("riderequestid1") != 0)
+                coPassengers.add(new CoPassenger(jObject.getString("CoPassenger1name"),jObject.getString("CoPassenger1picURL"),
+                        jObject.getInt("riderequestid1")));
+
+            if(jObject.getInt("riderequestid2") != 0)
+                coPassengers.add(new CoPassenger(jObject.getString("CoPassenger2name"),jObject.getString("CoPassenger2picURL"),
+                        jObject.getInt("riderequestid2")));
+
+            if(jObject.getInt("riderequestid3") != 0)
+                coPassengers.add(new CoPassenger(jObject.getString("CoPassenger3name"),jObject.getString("CoPassenger3picURL"),
+                        jObject.getInt("riderequestid3")));
+
+            if(jObject.getInt("riderequestid4") != 0)
+                coPassengers.add(new CoPassenger(jObject.getString("CoPassenger4name"),jObject.getString("CoPassenger4picURL"),
+                        jObject.getInt("riderequestid4")));
+            Log.d("CODE_FLOW", "CO PASSENGERS DATA RECEIVED");
+        }catch(Exception e){
+            Log.d("Exception", e.toString());
+        }
+        Log.d("CODE_FLOW", "RECEIVED CO PASSENGER INFO");
+    }
+
     private void setStateBookRide(){
         inRide = false;
         awaitingRide = false;
@@ -803,6 +921,14 @@ public class MainActivity extends ActionBarActivity implements android.location.
         fm.executePendingTransactions();
 
         setTitle("Book Ride");
+        IconGenerator iconFactory = new IconGenerator(this);
+        iconFactory.setColor(Color.GREEN);
+        sourceMarker = addIcon(iconFactory, "PickUp", new LatLng(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude));
+        sourceMarker.isDraggable();
+
+        CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(currentLocationCoordinate, 15);
+        mGoogleMap.animateCamera(yourLocation);
+
     }
 
     public void requestBookRide(View view) throws ExecutionException, InterruptedException {
@@ -884,19 +1010,24 @@ public class MainActivity extends ActionBarActivity implements android.location.
         }
     }
 
-    public void requestCancelRide(View view) throws ExecutionException, InterruptedException, JSONException {
+    public void requestCancelRide(View view) throws ExecutionException, InterruptedException, JSONException, ParseException {
 
-        float cost = 100.0f;
-        Double minutesIncurred = currentRideDetails.timeIncurred + System.currentTimeMillis() / 60000.0 - cabDetailsRequestTime;
+        float cost = BASECHARGE;
+
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+        Date currentTime = sdf.parse(sdf.format(new Date()));
+        Date bookingTime = sdf.parse((currentRideDetails.bookingTime));
+        long difference = currentTime.getTime() - bookingTime.getTime();
+        int min = (int) (difference) / (1000*60);
+
         DistanceDurationInfo getDistDurInfoTask = new DistanceDurationInfo(currentRideDetails.sourceCoordinates, cabLatestCoordinate);
-        float[] distdurInfo = getDistDurInfoTask.googleDistanceDurationInfo();
+        float[] distdurInfo = getDistDurInfoTask.defaultDistanceDurationInfo();
 
-        if (minutesIncurred < 5.0)
+        if (min < 5.0)
             cost = 0;
-        else if (distdurInfo[1] < 10)
+
+        if (distdurInfo[1] < 10)
             cost = 100;
-        else
-            cost = BASECHARGE;
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
 
@@ -912,9 +1043,10 @@ public class MainActivity extends ActionBarActivity implements android.location.
                     public void onClick(DialogInterface dialog, int id) {
                         // todo when user cancels ride
 
-                        CancelRideTask cancelRide = new CancelRideTask(authenticationHeader);
+                        HttpRequestTask cancelRide = new HttpRequestTask();
                         try {
                             String cancelRideResult = cancelRide.execute("http://www.hoi.co.in/api/cancelride/" + rideRequestId).get();
+                            System.out.println("Cancel Ride Details" + cancelRideResult);
                         } catch (InterruptedException e) {
                             e.printStackTrace();
                         } catch (ExecutionException e) {
@@ -935,7 +1067,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
         AlertDialog dialog = builder.create();
         final TextView tvCost = (TextView) dView.findViewById(R.id.cancelcost);
-        tvCost.setText("Rs " + String.valueOf(cost));
+        tvCost.setText(getResources().getString(R.string.Rs) + " " + String.valueOf(cost));
         dialog.show();
     }
 
@@ -1136,8 +1268,33 @@ public class MainActivity extends ActionBarActivity implements android.location.
             public void run() {
                 handler.post(new Runnable() {
                     public void run() {
-                        TrackRideTask trackRide = new TrackRideTask(authenticationHeader);
-                        trackRide.execute("http://www.hoi.co.in/api/track/"+rideRequestId);
+                        HttpRequestTask trackRide = new HttpRequestTask();
+                        try {
+                            String res = trackRide.execute("http://www.hoi.co.in/api/track/"+rideRequestId).get();
+                            System.out.println(res);
+                            JSONObject jObject = new JSONObject(res);
+                            cabLatestCoordinate = new LatLng(jObject.getDouble("ridelastlat"),jObject.getDouble("ridelastlong"));
+                            IconGenerator iconFactory = new IconGenerator(MainActivity.this);
+                            iconFactory.setColor(Color.YELLOW);
+                            cabMarker = addIcon(iconFactory, "HOI CAB", cabLatestCoordinate);
+
+                            CameraUpdate cabLocation = CameraUpdateFactory.newLatLngZoom(cabLatestCoordinate, 15);
+                            mGoogleMap.animateCamera(cabLocation);
+
+                            if(jObject.getBoolean("rideunderway") == true){
+                                setStateInRide();
+
+                                StartRideTask startRide = new StartRideTask(authenticationHeader);
+                                String str_result = startRide.execute("http://www.hoi.co.in/api/startride/"+rideRequestId).get();
+                                stoptimertask();
+
+                            }else if(jObject.getBoolean("ridecancelled") == true){
+                                stoptimertask();
+                                setStateBookRide();
+                            }
+                        } catch (Exception e) {
+                            Log.e("EXCEPTION", e.getMessage());
+                        }
                     }
                 });
             }
@@ -1203,10 +1360,10 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
         Bundle args = new Bundle();
         args.putString("authenticationheader", authenticationHeader);
+        args.putDouble("balance",balance);
         displayFragment.setArguments(args);
 
         fm.beginTransaction().replace(R.id.content_frame,displayFragment).commit();
-        fm.executePendingTransactions();
         setTitle("Wallet");
     }
 
@@ -1261,6 +1418,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
      * Represents an asynchronous cab booking task used to authenticate
      * the ride.
      */
+
     private class CabBookingTask extends AsyncTask<String, Void, String> {
 
         private HttpResponse response;
@@ -1351,156 +1509,26 @@ public class MainActivity extends ActionBarActivity implements android.location.
             finally {
                 try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
             }
-
-            return result;
-        }
-
-        @Override
-        protected void onPostExecute(final String data) {
             JSONObject jObject;
-            if (data != null) {
-
-                try {
-                    jObject = new JSONObject(data);
-                    currentRideDetails = new DetailCurrentRide(cabBookingData, jObject);
-                    carDetails = new DetailCar(jObject.getJSONObject("carinfo"));
-                    driverDetails = new DetailDriver(jObject);
-                    cabLatestCoordinate = new LatLng(jObject.getDouble("ridelastlat"), jObject.getDouble("ridelastlong"));
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
-
-            } else {
-                //Todo if no data come from server
-            }
-        }
-
-        @Override
-        protected void onCancelled() {
-        }
-    }
-
-    private class TrackRideTask extends AsyncTask<String, Void, String> {
-
-        private final String authHeader;
-        private HttpResponse response;
-
-        TrackRideTask(String authHeader) {
-            this.authHeader = authHeader;
-        }
-
-        @Override
-        protected String doInBackground(String... url) {
-            // TODO: attempt authentication against a network service.
-            SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
-            String currentDateandTime = sdf.format(new Date());
-            Encryptor encryptor = new Encryptor();
-            String encrptedkey = "";
-
             try {
-                encrptedkey = encryptor.getEncryptedKeyValue(currentDateandTime);
-            } catch (InvalidKeyException e1) {
-                e1.printStackTrace();
-            } catch (IllegalBlockSizeException e1) {
-                e1.printStackTrace();
-            } catch (BadPaddingException e1) {
-                e1.printStackTrace();
-            } catch (UnsupportedEncodingException e1) {
-                e1.printStackTrace();
-            } catch (DecoderException e1) {
-                e1.printStackTrace();
-            }
-
-            try {
-
-                HttpPost request = new HttpPost(url[0]);
-                request.addHeader("Authorization", "Basic " + authHeader);
-                request.addHeader("androidkey",encrptedkey);
-
-                List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>(1);
-                nameValuePairs.add(new BasicNameValuePair("counter", currentDateandTime));
-
-                request.setEntity(new UrlEncodedFormEntity(nameValuePairs));
-
-                HttpClient httpclient = new DefaultHttpClient();
-                try {
-                    System.out.println("ch2");
-                    response = httpclient.execute(request);
-
-                } catch (ClientProtocolException e) {
-                    e.printStackTrace();
-                }
-
-            } catch (IOException e) {
+                jObject = new JSONObject(result);
+                currentRideDetails = new DetailCurrentRide(cabBookingData, jObject);
+                carDetails = new DetailCar(jObject.getJSONObject("carinfo"));
+                driverDetails = new DetailDriver(jObject);
+                cabLatestCoordinate = new LatLng(jObject.getDouble("ridelastlat"), jObject.getDouble("ridelastlong"));
+            } catch (JSONException e) {
                 e.printStackTrace();
             }
 
-            InputStream inputStream = null;
-            String result = null;
-            try {
-                System.out.println("ch4");
-                HttpEntity entity = response.getEntity();
-
-                inputStream = entity.getContent();
-                // json is UTF-8 by default
-                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"), 8);
-                StringBuilder sb = new StringBuilder();
-
-                String line = null;
-                while ((line = reader.readLine()) != null)
-                {
-                    sb.append(line + "\n");
-                }
-                result = sb.toString();
-            } catch (Exception e) {
-                // Oops
-            }
-            finally {
-                System.out.println(result);
-                try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
-            }
-
             return result;
         }
 
         @Override
         protected void onPostExecute(final String data) {
-
-            JSONObject jObject;
-
-            if (data != null) {
-
-                try{
-                    jObject = new JSONObject(data);
-                    cabLatestCoordinate = new LatLng(jObject.getDouble("ridelastlat"),jObject.getDouble("ridelastlong"));
-
-                    if(jObject.getBoolean("rideunderway") == true){
-                        setStateInRide();
-
-                        StartRideTask startRide = new StartRideTask(authenticationHeader);
-                        String str_result = startRide.execute("http://www.hoi.co.in/api/startride/"+rideRequestId).get();
-                        stoptimertask();
-
-                        IconGenerator iconFactory = new IconGenerator(MainActivity.this);
-                        iconFactory.setColor(Color.YELLOW);
-                        cabMarker = addIcon(iconFactory, "HOI CAB", cabLatestCoordinate);
-
-                        CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(cabLatestCoordinate, 15);
-                        mGoogleMap.animateCamera(yourLocation);
-                    }else if(jObject.getBoolean("ridecancelled") == true){
-                        stoptimertask();
-                        setStateBookRide();
-                    }
-                }catch(Exception e){
-                    Log.d("Exception", e.toString());
-                }
-            } else {
-                //Todo if no data come from server
-            }
         }
+
         @Override
         protected void onCancelled() {
-
         }
     }
 
@@ -1615,14 +1643,7 @@ public class MainActivity extends ActionBarActivity implements android.location.
                     jObject = new JSONObject(data);
                     cabLatestCoordinate = new LatLng(jObject.getDouble("ridelastlat"),jObject.getDouble("ridelastlong"));
                     billingRate = (float)jObject.getDouble("billingrate");
-
-                    IconGenerator iconFactory = new IconGenerator(MainActivity.this);
-                    iconFactory.setColor(Color.YELLOW);
-                    cabMarker = addIcon(iconFactory, "HOI CAB", cabLatestCoordinate);
-
-                    CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(cabLatestCoordinate, 15);
-                    mGoogleMap.animateCamera(yourLocation);
-
+                    //Todo show current location
                 }catch(Exception e){
                     Log.d("Exception", e.toString());
                 }
@@ -1745,25 +1766,23 @@ public class MainActivity extends ActionBarActivity implements android.location.
                 //Todo if the ride has been closed
                 try{
                     jObject = new JSONObject(data);
-                    if (jObject.getBoolean("rideclosed") || jObject.getBoolean("rideratingawaited")) {
+                    if (jObject.getBoolean("rideratingawaited")) {
                         //Todo show the bill summary
                         setStateBookRide();
-                        String res = (new CloseRideTask()).execute().get();
-
+                        String res = (new HttpRequestTask()).execute(BASE_SERVER_URL+"closeride/"+rideRequestId).get();
+                        try {
+                            JSONObject rideSummary = new JSONObject(res);
+                            //Todo show account summary
+                            createRideSummaryDialog(rideSummary);
+                        } catch (JSONException e) {
+                            Log.e("EXCEPTION",e.getMessage());
+                        }
+                        //Todo rating of pending copassengers and driver
                     }
                     else {
                         cabLatestCoordinate = new LatLng(jObject.getDouble("ridelastlat"), jObject.getDouble("ridelastlong"));
                         billingRate = (float) jObject.getDouble("billingrate");
-
-                        IconGenerator iconFactory = new IconGenerator(MainActivity.this);
-                        iconFactory.setColor(Color.YELLOW);
-                        cabMarker = addIcon(iconFactory, "HOI CAB", cabLatestCoordinate);
-
-                        CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(cabLatestCoordinate, 15);
-                        mGoogleMap.animateCamera(yourLocation);
                     }
-
-
                 }catch(Exception e){
                     Log.d("Exception", e.toString());
                 }
@@ -1780,13 +1799,17 @@ public class MainActivity extends ActionBarActivity implements android.location.
         }
     }
 
-    private class CancelRideTask extends AsyncTask<String, Void, String> {
+    private class HttpRequestTask extends AsyncTask<String, Void, String> {
 
-        private final String authHeader;
         private HttpResponse response;
+        JSONObject data;
 
-        CancelRideTask(String authHeader) {
-            this.authHeader = authHeader;
+        HttpRequestTask(JSONObject data){
+            this.data = data;
+        }
+
+        HttpRequestTask(){
+            this.data = new JSONObject();
         }
 
         @Override
@@ -1813,206 +1836,32 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
             try {
 
-                HttpPost request = new HttpPost(url[0]);
-                request.addHeader("Authorization", "Basic " + authHeader);
-                request.addHeader("androidkey",encrptedkey);
-
-                HttpClient httpclient = new DefaultHttpClient();
-                try {
-                    response = httpclient.execute(request);
-
-                } catch (ClientProtocolException e) {
-                    e.printStackTrace();
-                }
-
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
-            InputStream inputStream = null;
-            String result = null;
-            try {
-                HttpEntity entity = response.getEntity();
-
-                inputStream = entity.getContent();
-                // json is UTF-8 by default
-                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"), 8);
-                StringBuilder sb = new StringBuilder();
-
-                String line = null;
-                while ((line = reader.readLine()) != null)
-                {
-                    sb.append(line + "\n");
-                }
-                result = sb.toString();
-            } catch (Exception e) {
-                // Oops
-            }
-            finally {
-                System.out.println("Cancel Ride :"+result);
-                try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
-            }
-
-            return result;
-        }
-
-        @Override
-        protected void onPostExecute(final String data) {
-
-
-            JSONObject jObject;
-
-            if (data != null) {
-
-                try{
-                    jObject = new JSONObject(data);
-                    cabLatestCoordinate = new LatLng(jObject.getDouble("ridelastlat"),jObject.getDouble("ridelastlong"));
-                    billingRate = (float) jObject.getDouble("billingrate");
-
-
-                }catch(Exception e){
-                    Log.d("Exception", e.toString());
-                }
-
-            } else {
-                //Todo if no data come from server
-
-            }
-        }
-
-        @Override
-        protected void onCancelled() {
-
-        }
-    }
-
-    private class CloseRideTask extends AsyncTask<String, Void, String> {
-
-        private HttpResponse response;
-
-        @Override
-        protected String doInBackground(String... url) {
-            // TODO: attempt authentication against a network service.
-            SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
-            String currentDateandTime = sdf.format(new Date());
-            Encryptor encryptor = new Encryptor();
-            String encrptedkey = "";
-            try {
-                encrptedkey = encryptor.getEncryptedKeyValue(currentDateandTime);
-            } catch (InvalidKeyException e1) {
-                e1.printStackTrace();
-            } catch (IllegalBlockSizeException e1) {
-                e1.printStackTrace();
-            } catch (BadPaddingException e1) {
-                e1.printStackTrace();
-            } catch (UnsupportedEncodingException e1) {
-                e1.printStackTrace();
-            } catch (DecoderException e1) {
-                e1.printStackTrace();
-            }
-            try {
                 HttpPost request = new HttpPost(url[0]);
                 request.addHeader("Authorization", "Basic " + authenticationHeader);
-                request.addHeader("androidkey",encrptedkey);
+                request.addHeader("androidkey", encrptedkey);
+
                 List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>(1);
                 nameValuePairs.add(new BasicNameValuePair("counter", currentDateandTime));
+                data.accumulate("counter",currentDateandTime);
+
                 request.setEntity(new UrlEncodedFormEntity(nameValuePairs));
+                if(data != null){
+                    request.addHeader("Content-Type", "application/json");
+                    request.setEntity(new StringEntity(data.toString()));
+                }
                 HttpClient httpclient = new DefaultHttpClient();
+
                 try {
                     response = httpclient.execute(request);
-
                 } catch (ClientProtocolException e) {
                     e.printStackTrace();
                 }
+
             } catch (IOException e) {
                 e.printStackTrace();
-            }
-            InputStream inputStream = null;
-            String result = null;
-            try {
-                HttpEntity entity = response.getEntity();
-                inputStream = entity.getContent();
-                // json is UTF-8 by default
-                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"), 8);
-                StringBuilder sb = new StringBuilder();
-                String line = null;
-                while ((line = reader.readLine()) != null)
-                {
-                    sb.append(line + "\n");
-                }
-                result = sb.toString();
-            } catch (Exception e) {
-                // Oops
-            }
-            finally {
-                try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
-            }
-            try {
-                JSONObject jObject = new JSONObject(result);
-                //Todo show account summary
-                createRideSummaryDialog(jObject);
             } catch (JSONException e) {
                 e.printStackTrace();
             }
-            return result;
-        }
-        @Override
-        protected void onPostExecute(final String data) { }
-
-        @Override
-        protected void onCancelled() {
-
-        }
-    }
-
-    private class RideRequestInfo extends AsyncTask<String, Void, String> {
-
-        private HttpResponse response;
-
-        @Override
-        protected String doInBackground(String... url) {
-            // TODO: attempt authentication against a network service.
-            SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
-            String currentDateandTime = sdf.format(new Date());
-            Encryptor encryptor = new Encryptor();
-            String encrptedkey = "";
-
-            try {
-                encrptedkey = encryptor.getEncryptedKeyValue(currentDateandTime);
-            } catch (InvalidKeyException e1) {
-                e1.printStackTrace();
-            } catch (IllegalBlockSizeException e1) {
-                e1.printStackTrace();
-            } catch (BadPaddingException e1) {
-                e1.printStackTrace();
-            } catch (UnsupportedEncodingException e1) {
-                e1.printStackTrace();
-            } catch (DecoderException e1) {
-                e1.printStackTrace();
-            }
-
-            try {
-
-                HttpPost request = new HttpPost(url[0]);
-                request.addHeader("Authorization", "Basic " + authenticationHeader);
-                request.addHeader("androidkey",encrptedkey);
-
-                List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>(1);
-                nameValuePairs.add(new BasicNameValuePair("counter", currentDateandTime));
-
-                request.setEntity(new UrlEncodedFormEntity(nameValuePairs));
-
-                HttpClient httpclient = new DefaultHttpClient();
-
-                try {
-                    response = httpclient.execute(request);
-                } catch (ClientProtocolException e) {
-                    e.printStackTrace();
-                }
-
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
 
             InputStream inputStream = null;
             String result = null;
@@ -2034,127 +1883,6 @@ public class MainActivity extends ActionBarActivity implements android.location.
             }
             finally {
                 try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
-            }
-            JSONObject jObject, genRideRequestInfo, rideResponceInfo;
-
-            try {
-                jObject = new JSONObject(result);
-                genRideRequestInfo = jObject.getJSONObject("grri");
-                rideResponceInfo = jObject.getJSONObject("rrd");
-                currentRideDetails = new DetailCurrentRide(genRideRequestInfo);
-                carDetails = new DetailCar(rideResponceInfo.getJSONObject("carinfo"));
-                driverDetails = new DetailDriver(jObject);
-                cabLatestCoordinate = new LatLng(rideResponceInfo.getDouble("ridelastlong"), rideResponceInfo.getDouble("ridelastlat"));
-            } catch (Exception e) {
-                Log.d("Exception", e.toString());
-            }
-            return result;
-        }
-
-        @Override
-        protected void onPostExecute(final String data) {
-        }
-
-        @Override
-        protected void onCancelled() {
-
-        }
-    }
-
-    private class CoPassengerInfo extends AsyncTask<String, Void, String> {
-
-        private HttpResponse response;
-
-        @Override
-        protected String doInBackground(String... url) {
-            // TODO: attempt authentication against a network service.
-            SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
-            String currentDateandTime = sdf.format(new Date());
-            Encryptor encryptor = new Encryptor();
-            String encrptedkey = "";
-
-            try {
-                encrptedkey = encryptor.getEncryptedKeyValue(currentDateandTime);
-            } catch (InvalidKeyException e1) {
-                e1.printStackTrace();
-            } catch (IllegalBlockSizeException e1) {
-                e1.printStackTrace();
-            } catch (BadPaddingException e1) {
-                e1.printStackTrace();
-            } catch (UnsupportedEncodingException e1) {
-                e1.printStackTrace();
-            } catch (DecoderException e1) {
-                e1.printStackTrace();
-            }
-
-            try {
-
-                HttpPost request = new HttpPost(url[0]);
-                request.addHeader("Authorization", "Basic " + authenticationHeader);
-                request.addHeader("androidkey",encrptedkey);
-
-                List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>(1);
-                nameValuePairs.add(new BasicNameValuePair("counter", currentDateandTime));
-
-                request.setEntity(new UrlEncodedFormEntity(nameValuePairs));
-
-                HttpClient httpclient = new DefaultHttpClient();
-
-                try {
-                    response = httpclient.execute(request);
-                } catch (ClientProtocolException e) {
-                    e.printStackTrace();
-                }
-
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
-            InputStream inputStream = null;
-            String result = null;
-            try {
-                HttpEntity entity = response.getEntity();
-                inputStream = entity.getContent();
-
-                // json is UTF-8 by default
-                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"), 8);
-                StringBuilder sb = new StringBuilder();
-                String line = null;
-                while ((line = reader.readLine()) != null)
-                {
-                    sb.append(line + "\n");
-                }
-                result = sb.toString();
-            } catch (Exception e) {
-                // Oops
-            }
-            finally {
-                try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
-            }
-            JSONObject jObject;
-            try{
-                jObject = new JSONObject(result);
-                Log.d("DATA_CO_PASSENGER_INFO", result);
-                coPassengers = new ArrayList<CoPassenger>();
-
-                if(jObject.getInt("riderequestid1") != 0)
-                    coPassengers.add(new CoPassenger(jObject.getString("CoPassenger1name"),jObject.getString("CoPassenger1picURL"),
-                            jObject.getInt("riderequestid1")));
-
-                if(jObject.getInt("riderequestid2") != 0)
-                    coPassengers.add(new CoPassenger(jObject.getString("CoPassenger2name"),jObject.getString("CoPassenger2picURL"),
-                            jObject.getInt("riderequestid2")));
-
-                if(jObject.getInt("riderequestid3") != 0)
-                    coPassengers.add(new CoPassenger(jObject.getString("CoPassenger3name"),jObject.getString("CoPassenger3picURL"),
-                            jObject.getInt("riderequestid3")));
-
-                if(jObject.getInt("riderequestid4") != 0)
-                    coPassengers.add(new CoPassenger(jObject.getString("CoPassenger4name"),jObject.getString("CoPassenger4picURL"),
-                            jObject.getInt("riderequestid4")));
-                Log.d("CODE_FLOW", "CO PASSENGERS DATA RECEIVED");
-            }catch(Exception e){
-                Log.d("Exception", e.toString());
             }
             return result;
         }

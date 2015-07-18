@@ -48,12 +48,12 @@ public class DistanceDurationInfo {
         return distanceDurationInfo;
     }
 
-    public void defaultDistanceDurationInfo(){
-
-        distanceDurationInfo[0] = (float)(142.6 * Math.sqrt(Math.pow(Math.abs(srcCoordinate.latitude-dstCoordinate.latitude),2)+
-                Math.pow(Math.abs(srcCoordinate.longitude-dstCoordinate.longitude),2)));
-        distanceDurationInfo[1] = (float)(225.73 * Math.sqrt(Math.pow(Math.abs(srcCoordinate.latitude-dstCoordinate.latitude),2)+
-                Math.pow(Math.abs(srcCoordinate.longitude-srcCoordinate.longitude),2)));
+    public float[] defaultDistanceDurationInfo(){
+        double diffLat = Math.abs(srcCoordinate.latitude-dstCoordinate.latitude);
+        double diffLong = Math.abs(srcCoordinate.longitude-dstCoordinate.longitude);
+        distanceDurationInfo[0] = (float)(142.6 * Math.sqrt(diffLat*diffLat + diffLong*diffLong));
+        distanceDurationInfo[1] = (float)(225.73 * Math.sqrt(diffLat*diffLat + diffLong*diffLong));
+        return distanceDurationInfo;
     }
 
 

@@ -78,9 +78,10 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="5dp"></LinearLayout>
                             <TextView
+                                android:id="@+id/voucher"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="ADD COUPON CODE"
+                                android:text="ADD VOUCHER CODE"
                                 android:onClick="true"
                                 android:focusable="true"
                                 android:textStyle="italic"

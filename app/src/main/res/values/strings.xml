@@ -54,6 +54,9 @@
     <string name="signup">SignUp with Facebook</string>
     <string name="error_empty">This cannot be empty</string>
     <string name="com_facebook_loginview_log_in_button">SignUp with Facebook</string>
+    <string name="Rs">\u20B9</string>
+    <string name="dialog_add_voucher">Enter Voucher Code</string>
+    <string name="resend">Resend OTP</string>
 
     <string-array name="address_type">
         <item>Home</item>
