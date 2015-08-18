@@ -25,6 +25,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.Button;
@@ -51,6 +52,8 @@ import com.facebook.Profile;
 import com.facebook.login.LoginManager;
 import com.facebook.login.LoginResult;
 import com.facebook.login.widget.LoginButton;
+import com.google.android.gms.gcm.GoogleCloudMessaging;
+import com.google.android.gms.iid.InstanceID;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -107,19 +110,17 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
     private Profile profile;
     JSONObject facebookLoginDetails;
     private int numberOfFriends = -1;
-
     ProgressDialog processDialog;
-
-
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        prefs = ObscuredSharedPreferences.getPrefs(this, "Hoi Cabs", Context.MODE_PRIVATE);
-        FacebookSdk.sdkInitialize(getApplicationContext());
 
-        ckeckForServices();
+        super.onCreate(savedInstanceState);
+        prefs = ObscuredSharedPreferences.getPrefs(this, "HoiCabs", Context.MODE_PRIVATE);
+        FacebookSdk.sdkInitialize(getApplicationContext());
         setContentView(R.layout.activity_login);
+
+        startService(new Intent(this, RegistrationIntentService.class));
 
         callbackManager = CallbackManager.Factory.create();
         LoginManager.getInstance().logOut();
@@ -197,6 +198,8 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
         mEmailView = (AutoCompleteTextView) findViewById(R.id.email);
         mPasswordView = (EditText) findViewById(R.id.password);
 
+        ckeckForServices();
+
         mPasswordView.setOnEditorActionListener(new TextView.OnEditorActionListener() {
             @Override
             public boolean onEditorAction(TextView textView, int id, KeyEvent keyEvent) {
@@ -219,6 +222,8 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
             @Override
             public void onClick(View view) {
                 try {
+                    InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                    imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
                     attemptLogin();
                 } catch (ExecutionException e) {
                     e.printStackTrace();
@@ -359,6 +364,8 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
                                 @Override
                                 public void onResponse(JSONObject response) {
                                     try {
+                                        System.out.println(response.toString());
+
                                         if (response.getBoolean("response")) {
                                             dialog.dismiss();
                                         } else {
@@ -450,6 +457,15 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
 
             }
         });
+
+        InstanceID instanceID = InstanceID.getInstance(this);
+        try {
+            String regId = instanceID.getToken(getString(R.string.gcm_defaultSenderId), GoogleCloudMessaging.INSTANCE_ID_SCOPE, null);
+            Log.d("RegID", regId);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
     }
 
     private void ckeckForServices() {
@@ -460,10 +476,10 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
                     android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS);
             startActivity(callGPSSettingIntent);
             super.finish();
-        }
-        else {
+        }else{
             autoLogin();
         }
+
     }
 
 
@@ -476,9 +492,6 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
         if (mAuthTask != null) {
             return;
         }
-
-        prefs.edit().putString("username", null).commit();
-        prefs.edit().putString("password", null).commit();
         // Reset errors.
         mEmailView.setError(null);
         mPasswordView.setError(null);
@@ -489,6 +502,8 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
 
         boolean cancel = false;
         View focusView = null;
+
+
 
 
         // Check for a valid password, if the user entered one.
@@ -517,17 +532,15 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
             mAuthTask = new UserLoginTask(email, password);
 
             startProcessDialog();
-            String res = mAuthTask.execute((Void) null).get();
+            mAuthTask.execute((Void) null);
             dismissProcessDialog();
         }
     }
 
     public void autoLogin() {
-
         if (mAuthTask != null) {
             return;
         }
-
         // Store values at the time of the login attempt.
         String email = prefs.getString("username", null);
         String password = prefs.getString("password", null);
@@ -535,9 +548,10 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
 
         if (email != null && password != null) {
             if (isEmailValid(email) && isPasswordValid(password)) {
+                mEmailView.setText(email);
+                mPasswordView.setText(password);
                 mAuthTask = new UserLoginTask(email, password);
                 mAuthTask.execute((Void) null);
-
             }
         }
     }
@@ -652,15 +666,15 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
         new DownloadImageTask(pic).execute(picurl);
 
         facebookLoginDetails.accumulate("picurl",picurl);
-        if(facebookLoginDetails.has("first_name")) {
+        if(facebookLoginDetails.has("first_name") && !facebookLoginDetails.isNull("first_name")) {
             firstName.setText(facebookLoginDetails.getString("first_name"));
             firstName.setFocusable(false);
-        }if(facebookLoginDetails.has("last_name")) {
+        }if(facebookLoginDetails.has("last_name") && !facebookLoginDetails.isNull("last_name")) {
             lastName.setText(facebookLoginDetails.getString("last_name"));
             lastName.setFocusable(false);
-        }if(facebookLoginDetails.has("email")) {
+        }
+        if(facebookLoginDetails.has("email") && !facebookLoginDetails.isNull("email")) {
             email.setText(facebookLoginDetails.getString("email"));
-            email.setFocusable(false);
         }
 
         dialog.show();
@@ -675,18 +689,22 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
                 if(TextUtils.isEmpty(email.getText().toString())) {
                     email.setError("This cannot be empty");
                     checkDismiss = false;
+                    dismissProcessDialog();
                 }
                 if(TextUtils.isEmpty(mobile.getText().toString())) {
                     mobile.setError("This cannot be empty");
                     checkDismiss = false;
+                    dismissProcessDialog();
                 }
                 if(TextUtils.isEmpty(password.getText().toString())) {
                     password.setError("This cannot be empty");
                     checkDismiss = false;
+                    dismissProcessDialog();
                 }
                 if((confirmPassword.getText()).equals(password.getText())) {
                     confirmPassword.setError("Password Mismatch");
                     checkDismiss = false;
+                    dismissProcessDialog();
                 }
 
 
@@ -694,6 +712,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
                 if(checkDismiss){
                     //Todo submit the form
                     try {
+                        facebookLoginDetails.accumulate("email", email.getText().toString());
                         facebookLoginDetails.accumulate("mobile",mobile.getText().toString());
                         facebookLoginDetails.accumulate("password", password.getText().toString());
 
@@ -714,8 +733,12 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
                                     else{
                                         //do nothing
                                         dialog.dismiss();
+                                        dismissProcessDialog();
+                                        Toast.makeText(getApplicationContext(), response.getString("reason"), Toast.LENGTH_LONG).show();
                                     }
                                 }catch(Exception e){
+                                    dismissProcessDialog();
+                                    dialog.dismiss();
                                     Log.e("EXCEPTION", e.getMessage());
                                 }
                             }
@@ -777,7 +800,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
 
                                     mAuthTask = new UserLoginTask(facebookLoginDetails.getString("email"), facebookLoginDetails.getString("password"));
                                     startProcessDialog();
-                                    String res = mAuthTask.execute((Void) null).get();
+                                    mAuthTask.execute((Void) null);
                                     dismissProcessDialog();
                                     dialog.dismiss();
                                 }
@@ -846,6 +869,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
         private final String mPassword;
         private HttpResponse response;
         JSONObject jObject;
+        Intent intent;
         ProgressDialog asyncDialog = new ProgressDialog(LoginActivity.this);
 
         UserLoginTask(String email, String password) {
@@ -919,6 +943,31 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
                 } catch (Exception squish) {
                 }
             }
+                try {
+                    jObject = new JSONObject(result);
+                    if (jObject.getInt("code") == 1) {
+                        System.out.println(mEmail + " " + mPassword);
+                        prefs.edit().putString("username", mEmail).commit();
+                        prefs.edit().putString("password", mPassword).commit();
+
+                        intent = new Intent(LoginActivity.this, MainActivity.class);
+                        intent.putExtra("userData", result);
+                        intent.putExtra("authenticationHeader", authenticationHeader);
+
+                        result = "login";
+
+                    } else if ((jObject.getInt("code") == 5)) {
+
+                        result = "time";
+                    } else {
+                        result = "failed";
+                    }
+
+                } catch (JSONException e) {
+                    //mPasswordView.setError(getString(R.string.error_incorrect_password));
+                    e.printStackTrace();
+                }
+                asyncDialog.dismiss();
 
             return result;
         }
@@ -926,65 +975,33 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
         @Override
         protected void onPostExecute(final String data) {
             mAuthTask = null;
-
-
-            if (data != null) {
-                try {
-                    jObject = new JSONObject(data);
-                    if (jObject.getInt("code") == 1) {
-                        prefs.edit().clear().commit();
-                        prefs.edit().putString("username", mEmail);
-                        prefs.edit().putString("password", mPassword);
-                        prefs.edit().commit();
-
-                        Intent intent = new Intent(LoginActivity.this, MainActivity.class);
-                        intent.putExtra("userData", data);
-                        intent.putExtra("authenticationHeader", authenticationHeader);
-                        asyncDialog.dismiss();
-
-                        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        getApplicationContext().startActivity(intent);
-                        LoginActivity.this.finish();
-
-
-                    } else if ((jObject.getInt("code") == 5)) {
-
-                        asyncDialog.dismiss();
-                        new AlertDialog.Builder(LoginActivity.this)
-                                .setTitle("Time Mismatch")
-                                .setCancelable(false)
-                                .setMessage("Please check your time is accurate!")
-                                .setPositiveButton("Change DateTime", new DialogInterface.OnClickListener() {
-                                    public void onClick(DialogInterface dialog, int which) {
-                                        startActivity(new Intent(android.provider.Settings.ACTION_DATE_SETTINGS));
-                                    }
-                                })
-                                .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-                                    public void onClick(DialogInterface dialog, int which) {
-                                        // do nothing
-                                    }
-                                })
-                                .setIcon(android.R.drawable.ic_dialog_alert)
-                                .show();
-                    } else {
-                        asyncDialog.dismiss();
-                        mPasswordView.setError(getString(R.string.error_incorrect_password));
-                        mPasswordView.requestFocus();
-                    }
-
-                } catch (JSONException e) {
-                    mPasswordView.setError(getString(R.string.error_incorrect_password));
-                    e.printStackTrace();
-                }
+            if (data.equals("login")) {
                 asyncDialog.dismiss();
-
-            } else {
-                if (!mPasswordView.getText().toString().isEmpty()) {
-                    asyncDialog.dismiss();
-                    mPasswordView.setError(getString(R.string.error_incorrect_password));
-                    mPasswordView.requestFocus();
-                }
-
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getApplicationContext().startActivity(intent);
+                LoginActivity.this.finish();
+            }else if(data.equals("time")){
+                asyncDialog.dismiss();
+                new AlertDialog.Builder(LoginActivity.this)
+                        .setTitle("Time Mismatch")
+                        .setCancelable(false)
+                        .setMessage("Please check your time is accurate!")
+                        .setPositiveButton("Change DateTime", new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int which) {
+                                startActivity(new Intent(android.provider.Settings.ACTION_DATE_SETTINGS));
+                            }
+                        })
+                        .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int which) {
+                                // do nothing
+                            }
+                        })
+                        .setIcon(android.R.drawable.ic_dialog_alert)
+                        .show();
+            }else{
+                asyncDialog.dismiss();
+                mPasswordView.setError(getString(R.string.error_incorrect));
+                mPasswordView.requestFocus();
             }
             super.onPostExecute(data);
 
@@ -994,6 +1011,7 @@ public class LoginActivity extends Activity implements LoaderCallbacks<Cursor> {
         protected void onPreExecute() {
             //set message of the dialog
             asyncDialog.setMessage(getString(R.string.login_attempt));
+            asyncDialog.setCancelable(false);
             //show dialog
             asyncDialog.show();
             super.onPreExecute();

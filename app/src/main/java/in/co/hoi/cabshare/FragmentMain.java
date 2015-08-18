@@ -1,6 +1,8 @@
 package in.co.hoi.cabshare;
 
 
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.AsyncTask;
@@ -10,12 +12,43 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.HorizontalScrollView;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.RatingBar;
 import android.widget.TextView;
 
+import org.apache.commons.codec.DecoderException;
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.message.BasicNameValuePair;
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.w3c.dom.Text;
+
+import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
+import java.security.InvalidKeyException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
 
 import de.hdodenhof.circleimageview.CircleImageView;
 
@@ -28,145 +61,175 @@ public class FragmentMain extends Fragment {
     boolean awaitingRide;
     boolean ratingPending;
     int numOfcoPassengers;
+    int rideId;
+    String authHeader;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         View view = null;
-        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(220, 220);
 
-        de.hdodenhof.circleimageview.CircleImageView c1,c2,c3,c4;
-        c1 = new CircleImageView(getActivity().getApplicationContext());
-        c1.setLayoutParams(layoutParams);
-        c1.setImageResource(R.drawable.male_user);
-        c2 = new CircleImageView(getActivity().getApplicationContext());
-        c2.setLayoutParams(layoutParams);
-        c2.setImageResource(R.drawable.male_user);
-        c3 = new CircleImageView(getActivity().getApplicationContext());
-        c3.setLayoutParams(layoutParams);
-        c3.setImageResource(R.drawable.male_user);
-        c4 = new CircleImageView(getActivity().getApplicationContext());
-        c4.setLayoutParams(layoutParams);
-        c4.setImageResource(R.drawable.male_user);
 
         inRide = getArguments().getBoolean("inride");
         awaitingRide = getArguments().getBoolean("awaitingride");
         ratingPending = getArguments().getBoolean("ratingpending");
 
         if(inRide){
+            Log.d("User State", "inRide");
             view = inflater.inflate(R.layout.fragment_inride, container, false);
-            HorizontalScrollView horizontalScrollView = (HorizontalScrollView)view.findViewById(R.id.horizontalScrollView);
-
-            numOfcoPassengers = getArguments().getInt("numofcopassengers");
-            if(numOfcoPassengers >= 1){
-                c1.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        ((MainActivity)getActivity()).createRatingDialog(getArguments().getString("url1"), 0);
-                    }
-                });
-                new DownloadImageTask(c1).execute(getArguments().getString("url1"));
-            }
-
-            if(numOfcoPassengers >= 2){
-                c2.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        ((MainActivity)getActivity()).createRatingDialog(getArguments().getString("url2"), 1);
-                    }
-                });
-                new DownloadImageTask(c2).execute(getArguments().getString("url2"));
-            }
-
-            if(numOfcoPassengers >= 3){
-                c3.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        ((MainActivity)getActivity()).createRatingDialog(getArguments().getString("url3"), 2);
-                    }
-                });
-                new DownloadImageTask(c3).execute(getArguments().getString("url3"));
-            }
-
-            if(numOfcoPassengers == 4){
-                c4.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        ((MainActivity)getActivity()).createRatingDialog(getArguments().getString("url4"), 3);
-                    }
-                });
-                new DownloadImageTask(c4).execute(getArguments().getString("url4"));
-            }
-
-            de.hdodenhof.circleimageview.CircleImageView cUnknown = new CircleImageView(getActivity().getApplicationContext());
-            cUnknown.setLayoutParams(layoutParams);
-            cUnknown.setImageResource(R.drawable.male_user);
-            cUnknown.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    //Todo report unknnown passenger in ride
-                }
-            });
-
-            LinearLayout hv = (LinearLayout) view.findViewById(R.id.pasengerlist);
-            hv.addView(c1);
-            hv.addView(c2);
-            hv.addView(c3);
-            hv.addView(c4);
-            hv.addView(cUnknown);
-
-            Log.d("CODE_FLOW", "Horizontal View Created");
         }
         else if(awaitingRide){
-            //Todo put driver details
+            Log.d("User State", "awaiting Ride");
             view = inflater.inflate(R.layout.fragment_awatingride, container, false);
-            TextView carMake = (TextView) view.findViewById(R.id.car_make);
-            TextView carNo = (TextView) view.findViewById(R.id.car_no);
-            carMake.setText(getArguments().getString("carmodel"));
-            carNo.setText(getArguments().getString("carno"));
-
-            TextView driverName = (TextView) view.findViewById(R.id.driver_name);
-            TextView driverNo = (TextView) view.findViewById(R.id.driver_moblie);
-            driverName.setText(getArguments().getString("drivername"));
-            driverNo.setText(getArguments().getString("drivermobile"));
-
-            de.hdodenhof.circleimageview.CircleImageView driverpic =
-                    (de.hdodenhof.circleimageview.CircleImageView) view.findViewById(R.id.driver_pic);
-            //new DownloadImageTask(driverpic).execute(getArguments().getString("driverpic"));
-
-
+        }
+        else if(ratingPending){
+            Log.d("User State", "rating pending");
+            view = inflater.inflate(R.layout.fragment_rating_pending, container, false);
         }
         else {
+            Log.d("User State", "Book Ride");
             view = inflater.inflate(R.layout.fragment_bookingride, container, false);
-            if(ratingPending){
-                //Todo rating pending
-            }
+            TextView tvSource = (TextView) view.findViewById(R.id.source_address);
+            tvSource.setText(getArguments().getString("pickupaddress"));
+            TextView tvDestination = (TextView) view.findViewById(R.id.destination_address);
+            tvSource.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    ((MainActivity)getActivity()).zoomToSource();
+                }
+            });
+            tvDestination.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    ((MainActivity)getActivity()).zoomToDestination();
+                }
+            });
         }
         return view;
     }
 
-    private class DownloadImageTask extends AsyncTask<String, Void, Bitmap> {
-        ImageView bmImage;
+    public void setTextSource(String text){
+        TextView textView = (TextView) getView().findViewById(R.id.source_address);
+        textView.setText(text);
+    }
 
-        public DownloadImageTask(ImageView bmImage) {
-            this.bmImage = bmImage;
+    public void setTextDestination(String text){
+        TextView textView = (TextView) getView().findViewById(R.id.destination_address);
+        textView.setText(text);
+    }
+
+    public int getDriverRating(){
+        return (int) ((RatingBar)getView().findViewById(R.id.rating_bar)).getRating();
+    }
+
+    public void setCopassengerLayout(int numOfcoPassengers){
+
+        de.hdodenhof.circleimageview.CircleImageView c1,c2,c3,cUnknown;
+        c1 = (de.hdodenhof.circleimageview.CircleImageView) getView().findViewById(R.id.coPassenger1);
+        c2 = (de.hdodenhof.circleimageview.CircleImageView) getView().findViewById(R.id.coPassenger2);
+        c3 = (de.hdodenhof.circleimageview.CircleImageView) getView().findViewById(R.id.coPassenger3);
+        cUnknown = (de.hdodenhof.circleimageview.CircleImageView) getView().findViewById(R.id.unknown);
+
+        if(numOfcoPassengers >= 1){
+            c1.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    try {
+                        ((MainActivity) getActivity()).createRatingDialog(0);
+                    } catch (ExecutionException e) {
+                        e.printStackTrace();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+            c1.setImageBitmap(((MainActivity)getActivity()).getPassengerBitmap(0));
+        }
+        Log.d("Passenger1", "done");
+
+        if(numOfcoPassengers >= 2){
+            c2.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    try {
+                        ((MainActivity) getActivity()).createRatingDialog(1);
+                    } catch (ExecutionException e) {
+                        e.printStackTrace();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+            c2.setImageBitmap(((MainActivity) getActivity()).getPassengerBitmap(1));
         }
 
-        protected Bitmap doInBackground(String... urls) {
-            String urldisplay = urls[0];
-            Bitmap mIcon11 = null;
-            try {
-                InputStream in = new java.net.URL(urldisplay).openStream();
-                mIcon11 = BitmapFactory.decodeStream(in);
-            } catch (Exception e) {
-                Log.e("Error", e.getMessage());
-                e.printStackTrace();
+        Log.d("Passenger2", "done");
+
+        if(numOfcoPassengers >= 3){
+            c3.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    try {
+                        ((MainActivity) getActivity()).createRatingDialog(2);
+                    } catch (ExecutionException e) {
+                        e.printStackTrace();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+            c3.setImageBitmap(((MainActivity) getActivity()).getPassengerBitmap(2));
+        }
+        Log.d("Passenger3", "done");
+        cUnknown.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                //Todo report unknnown passenger in ride
+                ((MainActivity) getActivity()).createRiderReportDialog();
             }
-            return mIcon11;
-        }
+        });
+        Log.d("CODE_FLOW", "Horizontal View Created");
+    }
 
-        protected void onPostExecute(Bitmap result) {
-            bmImage.setImageBitmap(result);
+    public void setDriverDetails(){
+        TextView carMake = (TextView) getView().findViewById(R.id.car_make);
+        TextView carNo = (TextView) getView().findViewById(R.id.car_no);
+        carMake.setText(((MainActivity) getActivity()).getCarModel());
+        carNo.setText(((MainActivity) getActivity()).getCarNumber());
+
+        TextView driverName = (TextView) getView().findViewById(R.id.driver_name);
+        TextView driverNo = (TextView) getView().findViewById(R.id.driver_moblie);
+        driverName.setText(((MainActivity) getActivity()).getDriverName());
+        driverNo.setText(((MainActivity) getActivity()).getDriverPhone());
+
+        de.hdodenhof.circleimageview.CircleImageView driverpic =
+                (de.hdodenhof.circleimageview.CircleImageView) getView().findViewById(R.id.driver_pic);
+        driverpic.setImageBitmap(((MainActivity) getActivity()).getDriverPic());
+    }
+
+    public void setRideSummary(JSONObject rideSummaryData){
+        try {
+
+            TextView distance = (TextView) getView().findViewById(R.id.distance);
+            distance.setText(((double) Math.round(rideSummaryData.getDouble("distancecoveredkms") * 100) / 100)+"");
+
+            TextView duration = (TextView) getView().findViewById(R.id.duration);
+            duration.setText(((double) Math.round(rideSummaryData.getDouble("timetakenmins") * 100) / 100)+"");
+
+            Double totalFare =rideSummaryData.getDouble("totaldistancefare") + rideSummaryData.getDouble("totaltimefare") + rideSummaryData.getDouble("tolltax");
+            ((MainActivity)getActivity()).addBalance(-totalFare);
+            TextView fare = (TextView) getView().findViewById(R.id.fare);
+            fare.setText("\u20B9" + ((double) Math.round(totalFare * 100) / 100));
+
+            de.hdodenhof.circleimageview.CircleImageView driverpic =
+                    (de.hdodenhof.circleimageview.CircleImageView) getView().findViewById(R.id.driverPic);
+            driverpic.setImageBitmap(((MainActivity)getActivity()).getDriverPic());
+
+
+        } catch (JSONException e) {
+            Log.e("Exception", e.getMessage());
         }
     }
+
+
 }

@@ -41,6 +41,7 @@ public class SearchActivity extends Activity {
     List<SavedPlaceItem> savedPlaces = new ArrayList<SavedPlaceItem>();
     ListView list;
     CustomListAdapter adapter;
+    String[] address = new String[2];
 
     String l;
 
@@ -61,12 +62,11 @@ public class SearchActivity extends Activity {
 
         // Getting a reference to the AutoCompleteTextView
         locationToSearch = (CustomAutoCompleteTextView) findViewById(R.id.search_location);
-        locationToSearch.setThreshold(1);
+        locationToSearch.setThreshold(3);
 
         l = getIntent().getExtras().getString("Location");
         currentCoordinate = new LatLng(Double.parseDouble(getIntent().getExtras().getString("CurrentLatitude"))
                 ,Double.parseDouble(getIntent().getExtras().getString("CurrentLongitude")));
-        System.out.println(l);
 
         //To show the favorite places of user saved by him : current count 5
         populateSavedPlaces();
@@ -84,7 +84,7 @@ public class SearchActivity extends Activity {
                 placesDownloadTask = new DownloadTask(PLACES);
 
                 // Getting url to the Google Places Autocomplete api
-                String url = getAutoCompleteUrl(s.toString());
+                String url = getAutoCompleteUrl(s.toString().replace(" ", "+"));
 
                 // Start downloading Google Places
                 // This causes to execute doInBackground() of DownloadTask class
@@ -111,7 +111,6 @@ public class SearchActivity extends Activity {
 
                 ListView lv = (ListView) arg0;
                 SimpleAdapter adapter = (SimpleAdapter) arg0.getAdapter();
-
                 HashMap<String, String> hm = (HashMap<String, String>) adapter.getItem(index);
 
                 // Creating a DownloadTask to download Places details of the selected place
@@ -130,10 +129,11 @@ public class SearchActivity extends Activity {
 
     private void populateSavedPlaces(){
         if (l.contentEquals("S")) {
+            String[] currentAddress = getAddress(currentCoordinate.latitude, currentCoordinate.longitude);
             savedPlaces.add(new SavedPlaceItem(currentCoordinate.latitude, currentCoordinate.longitude, "Current Location",
-                    getAddress(currentCoordinate.latitude, currentCoordinate.longitude)));
+                    currentAddress[0], currentAddress[1]));
         }
-        savedPlaces.add(new SavedPlaceItem(28.5549, 77.0842 , "Airport", "Indira Gandhi International Airport, New Delhi"));
+        savedPlaces.add(new SavedPlaceItem(28.5549, 77.0842 , "Airport", "Indira Gandhi International Airport", "New Delhi"));
 
         String[] str = {"Home", "Office", "Favorite1", "Favorite2", "Favorite3"};
             JSONObject jsonObject;
@@ -143,20 +143,19 @@ public class SearchActivity extends Activity {
                             jsonObject = new JSONObject(getIntent().getStringExtra(str[i]));
                             if (jsonObject != null) {
                                 savedPlaces.add(new SavedPlaceItem(jsonObject.getDouble("latitude"), jsonObject.getDouble("longitude"),
-                                        str[i], jsonObject.getString("address")));
+                                        str[i], jsonObject.getString("address0"),  jsonObject.getString("address1")));
                             }
                         }
                     }catch (JSONException e){
                     }
                 }
-
-
     }
 
-    public String getAddress(double latitude, double longitude){
+    public String[] getAddress(double latitude, double longitude){
         Geocoder geocoder = new Geocoder(this, Locale.getDefault());
 
-        String address = new String();
+        String[] address = new String[2];
+        address[0] = address[1] = "";
         List<Address> addresses = null;
         try {
             addresses = geocoder.getFromLocation(latitude,longitude,1); // Here 1 represent max location result to returned, by documents it recommended 1 to 5
@@ -166,19 +165,17 @@ public class SearchActivity extends Activity {
 
         if(addresses != null){
 
-            if(addresses.get(0).getAddressLine(0) != null) address = addresses.get(0).getAddressLine(0);
-            if(addresses.get(0).getLocality() != null) address = address +", "+ addresses.get(0).getLocality();
-            if(addresses.get(0).getAdminArea() != null) address = address +", "+ addresses.get(0).getAdminArea();
-            //if(addresses.get(0).getPostalCode() != null) address = address +", "+ addresses.get(0).getPostalCode();
+            if(addresses.get(0).getAddressLine(0) != null) address[0] = addresses.get(0).getAddressLine(0);
+            if(addresses.get(0).getLocality() != null) address[1] = addresses.get(0).getLocality();
+            if(addresses.get(0).getAdminArea() != null) address[1] = address[1] +", "+ addresses.get(0).getAdminArea();
+            if(addresses.get(0).getPostalCode() != null) address[1] = address[1] +", "+ addresses.get(0).getPostalCode();
             return address;
         }
 
-        return new String("Address could not be found");
+        return new String[]{"Address could not be found","Address could not be found"};
     }
 
-    public void sendMessage(View view)
-    {
-        //System.out.println("Check Child 1");
+    public void sendMessage(View view) {
         if(locationCoordinate == null)
             Toast.makeText(getApplicationContext(), "Please wait!! Searching location",
                     Toast.LENGTH_LONG).show();
@@ -186,14 +183,14 @@ public class SearchActivity extends Activity {
             Intent intent = new Intent();
             intent.putExtra("latitude", Double.toString(locationCoordinate.latitude));
             intent.putExtra("longitude", Double.toString(locationCoordinate.longitude));
-            //System.out.println("Check Child 2");
+            address = getAddress(locationCoordinate.latitude, locationCoordinate.longitude);
+            intent.putExtra("address0", address[0]);
+            intent.putExtra("address1", address[1]);
             if (l.contentEquals("S")) {
-                //System.out.println("Check Child 3");
                 setResult(2, intent);
             } else if (l.contentEquals("D")) {
                 setResult(3, intent);
             }
-
             finish();
         }
     }
@@ -202,7 +199,9 @@ public class SearchActivity extends Activity {
     public void onItemClick(int mPosition)
     {
         SavedPlaceItem tempValues = (SavedPlaceItem) savedPlaces.get(mPosition);
-        locationToSearch.setText(tempValues.getAddress2());
+        address[0] = tempValues.getAddress1();
+        address[1] = tempValues.getAddress2();
+        locationToSearch.setText(address[0] + ", " + address[1]);
         locationCoordinate = new LatLng(tempValues.getCoordinates().latitude, tempValues.getCoordinates().longitude);
         // SHOW ALERT
     }
@@ -396,6 +395,7 @@ public class SearchActivity extends Activity {
                         PlaceDetailsJSONParser placeDetailsJsonParser = new PlaceDetailsJSONParser();
                         // Getting the parsed data as a List construct
                         list = placeDetailsJsonParser.parse(jObject);
+                        System.out.println(jObject.toString());
                 }
 
             }catch(Exception e){
@@ -409,14 +409,16 @@ public class SearchActivity extends Activity {
 
             switch(parserType){
                 case PLACES :
-                    String[] from = new String[] { "description"};
-                    int[] to = new int[] { android.R.id.text1 };
+                    String[] from = new String[] {"description"};
+                    int[] to = new int[] {android.R.id.text1};
 
                     // Creating a SimpleAdapter for the AutoCompleteTextView
-                    SimpleAdapter adapter = new SimpleAdapter(getBaseContext(), result, android.R.layout.simple_list_item_1, from, to);
+                    SimpleAdapter adapter = new SimpleAdapter(getBaseContext(), result, android.R.layout.simple_dropdown_item_1line, from, to);
 
                     // Setting the adapter
                     locationToSearch.setAdapter(adapter);
+                    adapter.notifyDataSetChanged();
+
                     break;
                 case PLACES_DETAILS :
                     HashMap<String, String> hm = result.get(0);

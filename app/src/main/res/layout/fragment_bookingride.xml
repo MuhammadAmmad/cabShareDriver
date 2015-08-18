@@ -50,7 +50,9 @@
                     android:paddingLeft="12dp"
                     android:paddingTop="4dp"
                     android:layout_weight="0.7"
-                    android:textAppearance="?android:attr/textAppearanceMedium"
+                    android:maxLength="30"
+                    android:ellipsize = "marquee"
+                    android:textAppearance="?android:attr/textAppearanceSmall"
                     android:text="Pick Up Address.."
                     android:id="@+id/source_address" />
 
@@ -100,9 +102,11 @@
                     android:layout_height="wrap_content"
                     android:layout_gravity="center"
                     android:paddingLeft="12dp"
+                    android:maxLength="30"
                     android:paddingTop="4dp"
+                    android:ellipsize = "marquee"
                     android:layout_weight="0.7"
-                    android:textAppearance="?android:attr/textAppearanceMedium"
+                    android:textAppearance="?android:attr/textAppearanceSmall"
                     android:text="Drop Address.."
                     android:id="@+id/destination_address" />
 

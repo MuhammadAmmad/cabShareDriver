@@ -38,28 +38,30 @@ public class TransactionItem {
                 detail = jData.getString("credittype");
             }
 
-             /*
-            if(jData.has("genriderequestid")) genRideRequestId = jData.getInt("genriderequestid");
-            else genRideRequestId = 0;
 
-            if(jData.has("riderequestID")) rideRequestId = jData.getInt("riderequestID");
+            if(jData.isNull("genriderequestid")){
+                genRideRequestId = 0;
+            }
+            else genRideRequestId = jData.getInt("genriderequestid");
+
+            if(!jData.isNull("riderequestID")) rideRequestId = jData.getInt("riderequestID");
             else rideRequestId = 0;
 
-            if(jData.has("cancellationID")) cancellationId = jData.getInt("cancellationID");
+            if(!jData.isNull("cancellationID")) cancellationId = jData.getInt("cancellationID");
             else cancellationId = 0;
 
-            if(jData.has("voucherID")) voucherId = jData.getInt("voucherID");
+            if(!jData.isNull("voucherID")) voucherId = jData.getInt("voucherID");
             else voucherId = 0;
 
 
-            if(jData.has("creditpgID"))creditpgId = jData.getInt("creditpgID");
+            if(!jData.isNull("creditpgID"))creditpgId = jData.getInt("creditpgID");
             else creditpgId = 0;
 
 
-            if(jData.has("cancellationRequestID")) cancellationRequestId = jData.getInt("cancellationRequestID");
+            if(!jData.isNull("cancellationRequestID")) cancellationRequestId = jData.getInt("cancellationRequestID");
             else cancellationRequestId = 0;
-               */
-            if(jData.has("recorddatetime"))recordDateTime = jData.getString("recorddatetime");
+
+            if(!jData.isNull("recorddatetime"))recordDateTime = jData.getString("recorddatetime");
             else recordDateTime = "";
 
         }catch(Exception e){

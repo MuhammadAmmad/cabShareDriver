@@ -8,14 +8,16 @@ import com.google.android.gms.maps.model.LatLng;
 public class SavedPlaceItem {
 
         private LatLng coordinates = new LatLng(0,0);
+        private String type;
         private String address1="";
         private String address2="";
 
         /*********** Set Methods ******************/
 
-        public SavedPlaceItem(double lat, double lon, String add1, String add2)
+        public SavedPlaceItem(double lat, double lon, String type, String add1, String add2)
         {
             this.coordinates = new LatLng(lat, lon);
+            this.type = type;
             this.address1 = add1;
             this.address2 = add2;
         }
@@ -23,6 +25,8 @@ public class SavedPlaceItem {
 
 
         /*********** Get Methods ****************/
+
+        public String getType(){return type;}
 
         public String getAddress1()
         {

@@ -71,7 +71,6 @@
 
                             <Button android:id="@+id/recharge_button" style="?android:textAppearanceMedium"
                                 android:layout_width="match_parent" android:layout_height="wrap_content"
-                                android:onClick="rechargeHoiAcc"
                                 android:text="@string/recharge"
                                 android:background="@drawable/button_selector" />
                             <LinearLayout

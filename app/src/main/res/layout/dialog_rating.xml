@@ -1,40 +1,67 @@
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/scrollView1"
     android:layout_width="fill_parent"
-    android:layout_height="fill_parent">
-
+    android:layout_height="fill_parent" >
     <LinearLayout
         android:layout_width="fill_parent"
         android:layout_height="fill_parent"
         android:background="#e8e8e7"
-        android:orientation="vertical">
-
+        android:orientation="vertical"
+        >
         <LinearLayout
-            android:layout_width="fill_parent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#e8e8e7"
+            android:layout_marginTop="5dp"
+            android:orientation="horizontal"
+            android:layout_alignParentTop="true">
+
+            <ImageView android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/ic_logo"
+                android:layout_marginLeft="10dp"/>
+
+
+            <TextView android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/alertTitle"
+                android:text="Co-Passenger Rating"
+                android:textColor="#2582C5"
+                android:textSize="@dimen/abc_text_size_large_material"
+                android:layout_marginLeft="20dp"
+                android:textStyle="bold"
+                android:layout_gravity="center_horizontal|center_vertical"/>
+        </LinearLayout>
+
+
+        <LinearLayout android:layout_width="fill_parent"
             android:layout_height="fill_parent"
-            android:layout_marginBottom="16dp"
             android:layout_marginLeft="16dp"
-            android:layout_marginRight="16dp"
             android:layout_marginTop="16dp"
+            android:layout_marginRight="16dp"
+            android:layout_marginBottom="16dp"
+            android:orientation="vertical"
             android:background="@drawable/greybackground"
-            android:orientation="vertical">
+            >
+
 
             <de.hdodenhof.circleimageview.CircleImageView
                 android:id="@+id/co_passenger_dp"
                 android:layout_width="70dp"
                 android:layout_height="70dp"
-                android:layout_marginLeft="16dp"
-                android:layout_marginTop="38dp"
+                android:layout_gravity="center"
+                android:layout_margin="15dp"
                 android:src="@drawable/user1" />
 
             <RatingBar
                 android:id="@+id/rating_bar"
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:background="#f3f3f3"
-                android:numStars="5" />
-
+                android:layout_gravity="center"
+                style="?android:attr/ratingBarStyle"
+                android:numStars="5"/>
         </LinearLayout>
     </LinearLayout>
-
 </ScrollView>

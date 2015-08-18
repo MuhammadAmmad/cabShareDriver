@@ -1,6 +1,5 @@
 <ScrollView
     xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/scrollView1"
     android:layout_width="fill_parent"
     android:layout_height="fill_parent" >
@@ -13,6 +12,7 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="48dp"
+            android:layout_marginTop="10dp"
             android:background="#e8e8e7"
             android:orientation="horizontal"
             android:layout_alignParentTop="true">
@@ -25,7 +25,7 @@
 
             <TextView android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Ride Summary"
+                android:text="Transaction Summary"
                 android:textColor="#2582C5"
                 android:textSize="18sp"
                 android:layout_marginLeft="20dp"
@@ -56,8 +56,9 @@
                 android:hint="Source Address"
                 android:background="#f3f3f3"
                 android:paddingLeft="5dp"
-                android:layout_gravity="center_vertical"
-                />
+                android:layout_gravity="center"
+                android:autoText="false"
+                android:gravity="center_vertical|center_horizontal" />
 
             <TextView
                 android:layout_width="fill_parent"
@@ -70,51 +71,104 @@
                 android:id="@+id/destination"
                 android:hint="Destination Address"
                 android:background="#f3f3f3"
-                android:paddingLeft="5dp"/>
-
-            <TextView android:layout_width="fill_parent"
-                android:layout_height="40dp"
-                android:hint="Distance Covered in km"
-                android:id="@+id/distance"
-                android:background="#f3f3f3"
+                android:layout_gravity="center_vertical"
                 android:paddingLeft="5dp"
-                android:layout_marginTop="15dp"/>
-
-            <TextView android:layout_width="fill_parent"
-                android:layout_height="40dp"
-                android:hint="Ride Duration in mins"
-                android:id="@+id/duration"
-                android:background="#f3f3f3"
-                android:paddingLeft="5dp"
-                android:layout_marginTop="15dp"/>
+                android:gravity="center" />
 
             <TextView
                 android:layout_width="fill_parent"
                 android:layout_height="fill_parent"
-                android:text="Toll"
+                android:text="Booking Time"
+                android:layout_marginTop="10dp"/>
+
+            <TextView android:layout_width="fill_parent"
+                android:layout_height="40dp"
+                android:id="@+id/trans_time"
+                android:hint="Time"
+                android:background="#f3f3f3"
+                android:paddingLeft="5dp"
+                android:layout_gravity="center_vertical"
+                android:gravity="center" />
+
+            <TextView
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent"
+                android:text="Distance Covered in km"
+                android:layout_marginTop="10dp"/>
+
+            <TextView android:layout_width="fill_parent"
+                android:layout_height="40dp"
+                android:id="@+id/distance"
+                android:background="#f3f3f3"
+                android:paddingLeft="5dp"
+                android:layout_gravity="center_vertical"
+                android:gravity="center" />
+
+            <TextView
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent"
+                android:text="Ride Duration in mins"
+                android:layout_marginTop="10dp"/>
+            <TextView android:layout_width="fill_parent"
+                android:layout_height="40dp"
+                android:id="@+id/duration"
+                android:background="#f3f3f3"
+                android:paddingLeft="5dp"
+                android:layout_gravity="center_vertical"
+                android:gravity="center" />
+
+            <TextView
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent"
+                android:text="Distance Charges"
+                android:layout_marginTop="10dp"/>
+
+            <TextView android:layout_width="fill_parent"
+                android:layout_height="40dp"
+                android:id="@+id/distanceCost"
+                android:background="#f3f3f3"
+                android:paddingLeft="5dp"
+                android:layout_gravity="center_vertical"
+                android:gravity="center" />
+
+            <TextView
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent"
+                android:text="Ride Duration Charges"
+                android:layout_marginTop="10dp"/>
+            <TextView android:layout_width="fill_parent"
+                android:layout_height="40dp"
+                android:id="@+id/durationCost"
+                android:background="#f3f3f3"
+                android:paddingLeft="5dp"
+                android:layout_gravity="center_vertical"
+                android:gravity="center" />
+
+            <TextView
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent"
+                android:text="Toll Tax"
                 android:layout_marginTop="10dp"/>
             <TextView
                 android:id="@+id/tolltax"
                 android:layout_width="fill_parent"
                 android:layout_height="40dp"
-                android:layout_marginTop="15dp"
                 android:background="#f3f3f3"
-                android:hint="Toll"
-                android:paddingLeft="5dp" />
+                android:paddingLeft="5dp"
+                android:gravity="center" />
 
             <TextView
                 android:layout_width="fill_parent"
                 android:layout_height="fill_parent"
-                android:text="Fare"
+                android:text="Total Fare"
                 android:layout_marginTop="10dp"/>
             <TextView
                 android:id="@+id/fare"
                 android:layout_width="fill_parent"
                 android:layout_height="40dp"
-                android:layout_marginTop="15dp"
                 android:background="#f3f3f3"
-                android:hint="fare"
-                android:paddingLeft="5dp" />
+                android:paddingLeft="5dp"
+                android:gravity="center" />
 
             <Button
                 android:id="@+id/ride_summary_close"

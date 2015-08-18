@@ -1,5 +1,6 @@
 <ScrollView
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/scrollView1"
     android:layout_width="fill_parent"
     android:layout_height="fill_parent" >
@@ -9,6 +10,31 @@
         android:background="#e8e8e7"
         android:orientation="vertical"
         >
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#e8e8e7"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal"
+            android:layout_alignParentTop="true">
+
+            <ImageView android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/ic_logo"
+                android:layout_marginLeft="10dp"/>
+
+
+            <TextView android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/alertTitle"
+                android:text="Change Password"
+                android:textColor="#2582C5"
+                android:textSize="@dimen/abc_text_size_large_material"
+                android:layout_marginLeft="20dp"
+                android:textStyle="bold"
+                android:layout_gravity="center_horizontal|center_vertical"/>
+        </LinearLayout>
+
 
         <LinearLayout android:layout_width="fill_parent"
             android:layout_height="fill_parent"
@@ -19,6 +45,7 @@
             android:orientation="vertical"
             android:background="@drawable/greybackground"
             >
+
 
             <EditText android:layout_width="fill_parent"
                 android:layout_height="40dp"
@@ -42,10 +69,11 @@
                 android:layout_height="40dp"
                 android:id="@+id/confirm_pass"
                 android:hint="Confirm New Password"
-                android:inputType="textPassword"
                 android:background="#f3f3f3"
                 android:paddingLeft="5dp"
                 android:layout_marginTop="10dp"/>
+
         </LinearLayout>
     </LinearLayout>
 </ScrollView>
+

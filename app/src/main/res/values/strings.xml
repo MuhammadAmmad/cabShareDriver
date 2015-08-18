@@ -43,7 +43,7 @@
     <string name="login_attempt">Logging In</string>
     <string name="startRide">Start Ride</string>
     <string name="start_ride">Start Ride</string>
-    <string name="save">Save Location</string>
+    <string name="save">Save</string>
     <string name="cont">Continue Ride</string>
     <string name="start_activity">Starting Activity</string>
     <string name="openDrawer">Menu</string>
@@ -55,8 +55,21 @@
     <string name="error_empty">This cannot be empty</string>
     <string name="com_facebook_loginview_log_in_button">SignUp with Facebook</string>
     <string name="Rs">\u20B9</string>
+    <string name="rate1">\u20B9 10</string>
+    <string name="rate2">\u20B9 6.5</string>
+    <string name="rate3">\u20B9 5</string>
+    <string name="rate4">\u20B9 4</string>
     <string name="dialog_add_voucher">Enter Voucher Code</string>
     <string name="resend">Resend OTP</string>
+    <string name="close">Close</string>
+    <string name="error_when_retrieving_data">Error while retrieving data.</string>
+    <string name="error_incorrect">Incorrect Credentials</string>
+    <string name="pref_key_SENT_TOKEN_TO_SERVER">googleGCMToken</string>
+    <string name="intent_name_REGISTRATION_COMPLETE">Registration Complete</string>
+    <string name="intro_message">Search Location</string>
+    <string name="autocomplete_hint">Input Address</string>
+    <string name="clear_text">Clear</string>
+    <string name="place_details">Place Details</string>
 
     <string-array name="address_type">
         <item>Home</item>

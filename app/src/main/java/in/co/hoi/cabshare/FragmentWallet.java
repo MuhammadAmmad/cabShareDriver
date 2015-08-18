@@ -49,7 +49,6 @@ import javax.crypto.IllegalBlockSizeException;
  */
 public class FragmentWallet extends Fragment{
     String authenticationHeader;
-    List<TransactionItem> transactionList;
     Double balance;
 
     public static final String AUTH_HEAD = "authenticationheader";
@@ -73,7 +72,7 @@ public class FragmentWallet extends Fragment{
         tabs.addTab(walletTab);
 
         TextView remBalance = (TextView) view.findViewById(R.id.remaining_balance);
-        remBalance.setText(""+balance);
+        remBalance.setText("\u20B9 " + ((double) Math.round(balance) * 100) / 100);
 
         // Credit
         TabHost.TabSpec creditTab = tabs.newTabSpec("credit");
@@ -87,92 +86,32 @@ public class FragmentWallet extends Fragment{
         debitTab.setIndicator("Debits");
         tabs.addTab(debitTab);
 
-        //Populate credits list
-        ListView creditlv = (ListView) view.findViewById(R.id.credits_list);
-        ListView debitlv = (ListView) view.findViewById(R.id.debits_list);
-        try {
-            populateList("credits", creditlv);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-
-        try {
-            populateList("debits", debitlv);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-
         //Voucher Code
         TextView voucher = (TextView) view.findViewById(R.id.voucher);
         voucher.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
-
-                // Get the layout inflater
-                LayoutInflater inflater = getActivity().getLayoutInflater();
-                View dView = inflater.inflate(R.layout.voucher_dialog, null);
-
-                final EditText voucherCode = (EditText)dView.findViewById(R.id.voucher);
-
-
-                // Add the buttons
-                builder.setView(dView)
-                        // Add action buttons
-                        .setPositiveButton(R.string.submit, new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface dialog, int id) {}
-                        })
-                        .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
-                            public void onClick(DialogInterface dialog, int id) {
-                                //nothing to be done when user cancels his action
-                            }
-                        });
-                // Set other dialog properties
-                // Create the AlertDialog
-                final AlertDialog dialog = builder.create();
-                dialog.show();
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        if (voucherCode.getText().toString().isEmpty()) {
-                            voucherCode.setError("No Code entered");
-                        } else {
-                            try {
-                                String res = new HttpPostTask().execute(BASE_SERVER_URL + "applyvoucher/" + voucherCode.getText()).get();
-                                Toast.makeText(getActivity().getApplicationContext(),res,Toast.LENGTH_LONG).show();
-                            } catch (InterruptedException e) {
-                                e.printStackTrace();
-                            } catch (ExecutionException e) {
-                                e.printStackTrace();
-                            }
-                            dialog.dismiss();
-                        }
-                    }
-                });
+                ((MainActivity)getActivity()).createVoucherDialog();
             }
         });
         return view;
     }
 
-    private void populateList(String type, ListView lv) throws JSONException {
-        transactionList = new ArrayList<TransactionItem>();
-        HttpPostTask transactionListRequest = new HttpPostTask();
-        String res = "";
-        try {
-            res = transactionListRequest.execute(BASE_SERVER_URL+type).get();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (ExecutionException e) {
-            e.printStackTrace();
-        }
-        JSONArray jsonArray = new JSONArray(res);
-        for(int i = 0; i < jsonArray.length() ; i++){
-            TransactionItem tmp = new TransactionItem((JSONObject) jsonArray.get(i));
-            transactionList.add(tmp);
-        }
-        WalletListAdapter walletAdapter = new WalletListAdapter(getActivity(), transactionList, getResources());
-        lv.setAdapter(walletAdapter);
+    public void setBalance(Double balance){
+        TextView remBalance = (TextView) getView().findViewById(R.id.remaining_balance);
+        remBalance.setText("\u20B9 " + ((double) Math.round(balance) * 100) / 100);
+    }
+
+    public void setCredits(List<TransactionItem> transactionList){
+        WalletListAdapter creditsAdapter = new WalletListAdapter(getActivity(), transactionList, getResources());
+        ListView creditlv = (ListView) getView().findViewById(R.id.credits_list);
+        creditlv.setAdapter(creditsAdapter);
+    }
+
+    public void setDebits(List<TransactionItem> transactionList){
+        WalletListAdapter debitsAdapter = new WalletListAdapter(getActivity(), transactionList, getResources());
+        ListView debitlv = (ListView) getView().findViewById(R.id.debits_list);
+        debitlv.setAdapter(debitsAdapter);
     }
 
     private class HttpPostTask extends AsyncTask<String, Void, String> {
