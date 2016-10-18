@@ -12,9 +12,9 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
-import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RatingBar;
@@ -45,7 +45,6 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
@@ -57,179 +56,40 @@ import de.hdodenhof.circleimageview.CircleImageView;
  */
 public class FragmentMain extends Fragment {
 
-    boolean inRide;
-    boolean awaitingRide;
-    boolean ratingPending;
-    int numOfcoPassengers;
-    int rideId;
-    String authHeader;
+    private NextPassenger nextPassenger;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         View view = null;
 
+        nextPassenger = ((MainActivity)getActivity()).getNextPassenger();
+        if (nextPassenger != null && nextPassenger.getId() != 0) {
+            if (nextPassenger.isWaiting()) {
+                view = inflater.inflate(R.layout.fragment_main_pickup, container, false);
+                Button startRide = (Button) view.findViewById(R.id.startRide);
+                boolean arrived = ((MainActivity)getActivity()).getArrivedState();
+                if(arrived)
+                    startRide.setText(getResources().getText(R.string.start_ride));
+                else
+                    startRide.setText(getResources().getText(R.string.arrive_ride));
+            } else {
+                view = inflater.inflate(R.layout.fragment_main_drop, container, false);
+            }
+            de.hdodenhof.circleimageview.CircleImageView passengerPic = (de.hdodenhof.circleimageview.CircleImageView)
+                    view.findViewById(R.id.passengerPic);
+            passengerPic.setImageBitmap(nextPassenger.getImage());
+        }
+        else{
+            view = inflater.inflate(R.layout.fragment_main, container, false);
+        }
 
-        inRide = getArguments().getBoolean("inride");
-        awaitingRide = getArguments().getBoolean("awaitingride");
-        ratingPending = getArguments().getBoolean("ratingpending");
-
-        if(inRide){
-            Log.d("User State", "inRide");
-            view = inflater.inflate(R.layout.fragment_inride, container, false);
-        }
-        else if(awaitingRide){
-            Log.d("User State", "awaiting Ride");
-            view = inflater.inflate(R.layout.fragment_awatingride, container, false);
-        }
-        else if(ratingPending){
-            Log.d("User State", "rating pending");
-            view = inflater.inflate(R.layout.fragment_rating_pending, container, false);
-        }
-        else {
-            Log.d("User State", "Book Ride");
-            view = inflater.inflate(R.layout.fragment_bookingride, container, false);
-            TextView tvSource = (TextView) view.findViewById(R.id.source_address);
-            tvSource.setText(getArguments().getString("pickupaddress"));
-            TextView tvDestination = (TextView) view.findViewById(R.id.destination_address);
-            tvSource.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    ((MainActivity)getActivity()).zoomToSource();
-                }
-            });
-            tvDestination.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    ((MainActivity)getActivity()).zoomToDestination();
-                }
-            });
-        }
         return view;
     }
 
-    public void setTextSource(String text){
-        TextView textView = (TextView) getView().findViewById(R.id.source_address);
-        textView.setText(text);
+    public void changeStatetoArrived(){
+        Button startRide = (Button) getView().findViewById(R.id.startRide);
+        startRide.setText(getResources().getText(R.string.start_ride));
     }
-
-    public void setTextDestination(String text){
-        TextView textView = (TextView) getView().findViewById(R.id.destination_address);
-        textView.setText(text);
-    }
-
-    public int getDriverRating(){
-        return (int) ((RatingBar)getView().findViewById(R.id.rating_bar)).getRating();
-    }
-
-    public void setCopassengerLayout(int numOfcoPassengers){
-
-        de.hdodenhof.circleimageview.CircleImageView c1,c2,c3,cUnknown;
-        c1 = (de.hdodenhof.circleimageview.CircleImageView) getView().findViewById(R.id.coPassenger1);
-        c2 = (de.hdodenhof.circleimageview.CircleImageView) getView().findViewById(R.id.coPassenger2);
-        c3 = (de.hdodenhof.circleimageview.CircleImageView) getView().findViewById(R.id.coPassenger3);
-        cUnknown = (de.hdodenhof.circleimageview.CircleImageView) getView().findViewById(R.id.unknown);
-
-        if(numOfcoPassengers >= 1){
-            c1.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    try {
-                        ((MainActivity) getActivity()).createRatingDialog(0);
-                    } catch (ExecutionException e) {
-                        e.printStackTrace();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-            });
-            c1.setImageBitmap(((MainActivity)getActivity()).getPassengerBitmap(0));
-        }
-        Log.d("Passenger1", "done");
-
-        if(numOfcoPassengers >= 2){
-            c2.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    try {
-                        ((MainActivity) getActivity()).createRatingDialog(1);
-                    } catch (ExecutionException e) {
-                        e.printStackTrace();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-            });
-            c2.setImageBitmap(((MainActivity) getActivity()).getPassengerBitmap(1));
-        }
-
-        Log.d("Passenger2", "done");
-
-        if(numOfcoPassengers >= 3){
-            c3.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    try {
-                        ((MainActivity) getActivity()).createRatingDialog(2);
-                    } catch (ExecutionException e) {
-                        e.printStackTrace();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-            });
-            c3.setImageBitmap(((MainActivity) getActivity()).getPassengerBitmap(2));
-        }
-        Log.d("Passenger3", "done");
-        cUnknown.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                //Todo report unknnown passenger in ride
-                ((MainActivity) getActivity()).createRiderReportDialog();
-            }
-        });
-        Log.d("CODE_FLOW", "Horizontal View Created");
-    }
-
-    public void setDriverDetails(){
-        TextView carMake = (TextView) getView().findViewById(R.id.car_make);
-        TextView carNo = (TextView) getView().findViewById(R.id.car_no);
-        carMake.setText(((MainActivity) getActivity()).getCarModel());
-        carNo.setText(((MainActivity) getActivity()).getCarNumber());
-
-        TextView driverName = (TextView) getView().findViewById(R.id.driver_name);
-        TextView driverNo = (TextView) getView().findViewById(R.id.driver_moblie);
-        driverName.setText(((MainActivity) getActivity()).getDriverName());
-        driverNo.setText(((MainActivity) getActivity()).getDriverPhone());
-
-        de.hdodenhof.circleimageview.CircleImageView driverpic =
-                (de.hdodenhof.circleimageview.CircleImageView) getView().findViewById(R.id.driver_pic);
-        driverpic.setImageBitmap(((MainActivity) getActivity()).getDriverPic());
-    }
-
-    public void setRideSummary(JSONObject rideSummaryData){
-        try {
-
-            TextView distance = (TextView) getView().findViewById(R.id.distance);
-            distance.setText(((double) Math.round(rideSummaryData.getDouble("distancecoveredkms") * 100) / 100)+"");
-
-            TextView duration = (TextView) getView().findViewById(R.id.duration);
-            duration.setText(((double) Math.round(rideSummaryData.getDouble("timetakenmins") * 100) / 100)+"");
-
-            Double totalFare =rideSummaryData.getDouble("totaldistancefare") + rideSummaryData.getDouble("totaltimefare") + rideSummaryData.getDouble("tolltax");
-            ((MainActivity)getActivity()).addBalance(-totalFare);
-            TextView fare = (TextView) getView().findViewById(R.id.fare);
-            fare.setText("\u20B9" + ((double) Math.round(totalFare * 100) / 100));
-
-            de.hdodenhof.circleimageview.CircleImageView driverpic =
-                    (de.hdodenhof.circleimageview.CircleImageView) getView().findViewById(R.id.driverPic);
-            driverpic.setImageBitmap(((MainActivity)getActivity()).getDriverPic());
-
-
-        } catch (JSONException e) {
-            Log.e("Exception", e.getMessage());
-        }
-    }
-
 
 }

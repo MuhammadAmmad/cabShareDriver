@@ -1,6 +1,5 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    xmlns:fb="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:gravity="center_horizontal"
@@ -44,29 +43,8 @@
         android:textStyle="bold"
         android:background="#ff9acec9" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textAppearance="?android:attr/textAppearanceSmall"
-        android:textSize="15dp"
-        android:text="Forgot Password?"
-        android:clickable="true"
-        android:onClick=""
-        android:textStyle="italic"
-        android:textColor="#fffff6e9"
-        android:id="@+id/forgot_password"
-        android:layout_gravity="center_horizontal" />
-
-    <com.facebook.login.widget.LoginButton
-        android:id="@+id/login_button"
-        android:layout_width="wrap_content"
-        android:layout_height="50dp"
-        android:layout_gravity="center_horizontal"
-        android:layout_marginTop="30dp"
-        android:layout_marginBottom="30dp"
-        fb:com_facebook_login_text ="SignUp with Facebook"/>
-
     <ImageView
+        android:layout_marginTop="20dp"
         android:baselineAlignBottom="true"
         android:layout_width="116dp"
         android:layout_height="wrap_content"
@@ -86,6 +64,16 @@
         android:id="@+id/textView"
         android:layout_gravity="center_horizontal"
         android:textColor="#ffff8434" />
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textAppearance="?android:attr/textAppearanceSmall"
+        android:textSize="10dp"
+        android:text="Drivers"
+        android:clickable="true"
+        android:onClick=""
+        android:textColor="#fffff6e9"
+        android:layout_gravity="center_horizontal" />
 
 </LinearLayout>
 

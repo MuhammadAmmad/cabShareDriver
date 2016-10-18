@@ -7,17 +7,54 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical">
+
+        <LinearLayout
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentTop="true"
+            android:layout_alignParentLeft="true"
+            android:layout_alignParentStart="true"
+            android:id="@+id/search_view">
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="5dp"
+                android:background="#00000000">
+
+            </LinearLayout>
+            <LinearLayout
+                android:orientation="horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:layout_alignParentTop="true"
+                android:layout_alignParentLeft="true"
+                android:layout_alignParentStart="true"
+                android:background="@drawable/search_background"
+                android:padding="10dp"
+                android:layout_alignParentRight="true"
+                android:layout_alignParentEnd="true"
+                android:id="@+id/destinationView">
+
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:paddingLeft="10dp"
+                    android:layout_weight="0.8"
+                    android:textAppearance="?android:attr/textAppearanceSmall"
+                    android:text="No Destination"
+                    android:id="@+id/destination" />
+
+            </LinearLayout>
+        </LinearLayout>
     <FrameLayout
         android:id="@+id/content_frame"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
-        <ProgressBar
-            android:id="@+id/progressBar"
-            style="?android:attr/progressBarStyleLarge"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center" >
-        </ProgressBar>
+        android:layout_height="match_parent"
+        android:layout_below="@id/search_view">
 
         <fragment
             xmlns:android="http://schemas.android.com/apk/res/android"
@@ -36,18 +73,4 @@
 
     </FrameLayout>
     </LinearLayout>
-
-        <!-- Side navigation drawer UI -->
-
-    <android.support.v7.widget.RecyclerView
-        android:id="@+id/RecyclerView"
-        android:layout_width="300dp"
-        android:layout_height="match_parent"
-        android:layout_gravity="left"
-        android:background="#ffffff"
-        android:scrollbars="vertical">
-
-    </android.support.v7.widget.RecyclerView>
-
-
 </android.support.v4.widget.DrawerLayout>

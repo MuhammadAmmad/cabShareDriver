@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <string name="app_name">Hoi</string>
+    <string name="app_name">Hoi Drivers</string>
     <string name="action_search">Search</string>
     <string name="hello_world">Hello world!</string>
     <string name="search_hint">Search Places</string>
@@ -43,7 +43,7 @@
     <string name="login_attempt">Logging In</string>
     <string name="startRide">Start Ride</string>
     <string name="start_ride">Start Ride</string>
-    <string name="save">Save</string>
+    <string name="save">Save Location</string>
     <string name="cont">Continue Ride</string>
     <string name="start_activity">Starting Activity</string>
     <string name="openDrawer">Menu</string>
@@ -62,21 +62,14 @@
     <string name="dialog_add_voucher">Enter Voucher Code</string>
     <string name="resend">Resend OTP</string>
     <string name="close">Close</string>
-    <string name="error_when_retrieving_data">Error while retrieving data.</string>
-    <string name="error_incorrect">Incorrect Credentials</string>
-    <string name="pref_key_SENT_TOKEN_TO_SERVER">googleGCMToken</string>
-    <string name="intent_name_REGISTRATION_COMPLETE">Registration Complete</string>
-    <string name="intro_message">Search Location</string>
-    <string name="autocomplete_hint">Input Address</string>
-    <string name="clear_text">Clear</string>
-    <string name="place_details">Place Details</string>
-
-    <string-array name="address_type">
-        <item>Home</item>
-        <item>Office</item>
-        <item>Favorite1</item>
-        <item>Favorite2</item>
-        <item>Favorite3</item>
-    </string-array>
+    <string name="waiting">Waiting List</string>
+    <string name="ongoing">Ongoing List</string>
+    <string name="arrive_ride">Arrived</string>
+    <string name="call">Call</string>
+    <string name="passenger_list">Passenger List</string>
+    <string name="stop_ride">Stop Ride</string>
+    <string name="start_accepting">Start Accepting Ride</string>
+    <string name="refresh">Refresh</string>
+    <string name="error_when_retrieving_data">Error while retrieving Data</string>
 
 </resources>

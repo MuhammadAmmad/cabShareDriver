@@ -1,5 +1,6 @@
 package in.co.hoi.cabshare;
 
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.NotificationManager;
@@ -17,6 +18,8 @@ import android.location.Criteria;
 import android.location.Geocoder;
 import android.location.Location;
 import android.location.LocationManager;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -30,9 +33,8 @@ import android.support.v4.content.CursorLoader;
 import android.support.v4.content.Loader;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.ActionBarActivity;
-import android.support.v7.widget.LinearLayoutManager;
-import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.Toolbar;
+import android.transition.Explode;
 import android.util.Log;
 import android.view.GestureDetector;
 import android.view.LayoutInflater;
@@ -45,8 +47,8 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ListView;
-import android.widget.ProgressBar;
 import android.widget.RatingBar;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -88,6 +90,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.security.InvalidKeyException;
+import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -100,1117 +103,187 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 
-public class MainActivity extends ActionBarActivity implements android.location.LocationListener,GoogleMap.OnMapClickListener,LoaderCallbacks<Cursor>,GoogleMap.OnMarkerDragListener {
+public class MainActivity extends ActionBarActivity implements android.location.LocationListener, GoogleMap.OnMapClickListener{
+
+    //Todo remove next location icon
+    //Todo goto present location after startride
+
 
     /*
      * Constants
      */
-    private final static int BASECHARGE = 30;
     private static String authenticationHeader;
-    private final static String BASE_SERVER_URL = "http://www.hoi.co.in/api/";
+    private final static String BASE_SERVER_URL = "http://www.hoi.co.in/dapi/";
     public static final int NOTIFICATION_ID = 1;
+
+    ProgressDialog mProgress;
+    Boolean setup = false;
+    Handler mHandler;
+    LatLng nextDestination;
+    String resp = "";
+    boolean nextDestinationChanged = false;
+    boolean nextPassengerChanged = false;
+    boolean nextPathSet = false;
+    private boolean checkUpdateRide = false;
 
     /*
      * Markers for Google Map
      */
-	private GoogleMap mGoogleMap;
-    private Marker sourceMarker;
-    private Marker destinationMarker;
-    private Marker cabMarker;
-    private String[] sAddress = new String[2];
-    private String[] dAddress = new String[2];
-
-    /*
-     *   variables for navigation drawer
-     */
-    RecyclerView mRecyclerView;                           // Declaring RecyclerView
-    RecyclerView.Adapter mAdapter;                        // Declaring Adapter For Recycler View
-    RecyclerView.LayoutManager mLayoutManager;            // Declaring Layout Manager as a linear layout manager
-    DrawerLayout Drawer;                                  // Declaring DrawerLayout
-    ActionBarDrawerToggle mDrawerToggle;                  // Declaring Action Bar Drawer Toggle
-
-    private CharSequence mDrawerTitle;
+    private GoogleMap mGoogleMap;
     private CharSequence mTitle;
-    List<DrawerItem> dataList;
-    private ListView mDrawerList;
-    private DrawerLayout mDrawerLayout;
-    private String mActivityTitle;
-
-    private DetailCar carDetails;
-    private DetailCurrentRide currentRideDetails;
-    private DetailDriver driverDetails;
-    private DetailUser userDetails;
-    private boolean inRide;
-    private boolean awaitingRide;
-    private boolean ratingPending;
-    private int rideRequestId;
-    private int cabArrivalDuration;
-    private int cabDistanceAway;
-    CabBookingDetails cabBookingDetails;
-    private Double balance;
-    boolean rideBooked = false;
-
 
     /*
      * Miscellaneous variables
      */
     ObscuredSharedPreferences prefs;
     private LatLng currentLocationCoordinate;
-    private LatLng cabLatestCoordinate;
-    Timer timer;
-    TimerTask timerTask;
-    final Handler handler = new Handler();
-    int defaultView = 1;
-    ProgressDialog processDialog;
     Fragment displayFragment;
-    boolean cabNearCheck = true;
-    boolean setup = false;
-    ProgressDialog mProgress;
-    Handler mHandler;
-    private String tmpResponse = "";
-    private int currentFragmentId = -1;
-    private LatLng nextCabDestination = null;
-    private Marker nextStopMarker;
 
     /*
-     * Variable for fare calculation
+     * Ride variables
      */
-    private float billingRate = 10f;
-    private int stateCounter = 0;
-    private int refund = 0;
+    double distanceTravelled;
+    double distanceCharge;
+    long upTime;
+    double estimatedFare;
+    int counter;
+    double[] incomeRate = {0, 10, 11.5, 13, 14.5};
+    int distanceFare = 0;
+    int timeFare = 0;
+    int totalFare = 0;
+    List<PendingPayItem> pendingPayList;
 
     /*
-     * variable for user and driver rating
+     * Variables for passengers Ongoing and Waiting
      */
-    List<CoPassenger> coPassengers;
-
-
-    /*
-     * Wallet Variables
-     */
-    List<TransactionItem> creditList = new ArrayList<TransactionItem>();
-    List<TransactionItem> debitList = new ArrayList<TransactionItem>();
-
-    ObscuredSharedPreferences sharedPreferences;
-    public static final String HOI_OBSCURED_PREFERENCES = "Hoi Cabs" ;
+    private List<Passenger> passengers = new ArrayList<Passenger>();
+    private NextPassenger nextPassenger = null;
+    private boolean arrived = false;
+    private TextView mNextDestination;
+    private LinearLayout mNextDestinationView;
 
     /*
      * Activity related functions
      */
     @Override
-	protected void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(Bundle savedInstanceState) {
 
-        cabDistanceAway = 10000;
-        cabArrivalDuration = 10000;
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
 
-		super.onCreate(savedInstanceState);
-		setContentView(R.layout.activity_main);
+        estimatedFare = 0.0;
+        upTime = System.currentTimeMillis();
+        distanceTravelled = 0.0;
+        counter = 0;
 
-        prefs= ObscuredSharedPreferences.getPrefs(this, "Hoi Cabs", Context.MODE_PRIVATE);
-        String TITLES[] = {"Home","Wallet","Change Password","Contact Us","Complaint","LogOut"};
-        int ICONS[] = {R.drawable.ic_home,R.drawable.ic_wallet,R.drawable.ic_edit,R.drawable.ic_contact,R.drawable.ic_comp,R.drawable.ic_logout};
-
-        String regID = prefs.getString("regId","");
-        if(regID != "")
-            try {
-                new HttpRequestTask((new JSONObject()).accumulate("regID", regID)).execute("http://www.hoi.co.in/api/updateregid");
-            } catch (JSONException e) {
-                Log.e("EXCEPTION", e.getMessage());
-            }
-        try {
-
-            JSONObject userData = new JSONObject(getIntent().getStringExtra("userData"));
-            userDetails = new DetailUser(userData);
-
-            inRide = userData.getBoolean("inaride");
-            awaitingRide = userData.getBoolean("awaitingride");
-            ratingPending = userData.getBoolean("hastorateprevious");
-            rideRequestId  = userData.getInt("genriderequestid");
-            balance = userData.getDouble("availableinr");
-
-            if(getIntent().hasExtra("authenticationHeader"))
-                authenticationHeader = getIntent().getStringExtra("authenticationHeader");
-
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-
-        /*
-         * Updating the user state if user already booked the ride
-         */
-        // Initializing Navigation Drawer
-        mRecyclerView = (RecyclerView) findViewById(R.id.RecyclerView); // Assigning the RecyclerView Object to the xml View
-        mRecyclerView.setHasFixedSize(true);                            // Letting the system know that the list objects are of fixed size
-        mAdapter = new MyAdapter(TITLES,ICONS,userDetails.name,userDetails.phone,userDetails.displayPic,getApplicationContext());       // Creating the Adapter of MyAdapter class(which we are going to see in a bit)
-
-        // And passing the titles,icons,header view name, header view email,
-        // and header view profile picture
-        mRecyclerView.setAdapter(mAdapter);                              // Setting the adapter to RecyclerView
-        final GestureDetector mGestureDetector = new GestureDetector(MainActivity.this, new GestureDetector.SimpleOnGestureListener() {
-            @Override public boolean onSingleTapUp(MotionEvent e) {
-                return true;
+        prefs = ObscuredSharedPreferences.getPrefs(this, "HoiCabDrivers", Context.MODE_PRIVATE);
+        mNextDestination = (TextView) findViewById(R.id.destination);
+        mNextDestinationView = (LinearLayout) findViewById(R.id.destinationView);
+        mNextDestinationView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                gotoDestLocation();
             }
         });
+
+        setupMapFragment();
+
+        if (getIntent().hasExtra("authenticationHeader"))
+            authenticationHeader = getIntent().getStringExtra("authenticationHeader");
+
+
+        String data = getIntent().getStringExtra("userData");
+        JSONObject response = null;
         try {
-            drawerItemSelectedAction(defaultView);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (ExecutionException e) {
-            e.printStackTrace();
+            response = new JSONObject(data);
+            parseResponse(response);
+            if(passengers.size() > 0){
+                String destinationAddress = response.getString("next_address1") + response.getString("next_address2");
+                nextDestination = new LatLng(response.getDouble("next_lat"), response.getDouble("next_long"));
+                nextPassenger = setNextPassenger(response.getInt("nextriderid"), response.getString("nextriderphone"),
+                        nextDestination, destinationAddress);
+                arrived = response.getBoolean("next_arrived");
+                setUpHome(destinationAddress);
+                if (currentLocationCoordinate != null)
+                    setDestination();
+            }
+            else{
+                nextPassenger = null;
+                nextDestination = null;
+                arrived = false;
+                setUpHome("No Destination");
+            }
         } catch (JSONException e) {
-            e.printStackTrace();
-        }
-
-        mRecyclerView.addOnItemTouchListener(new RecyclerView.OnItemTouchListener() {
-            @Override
-            public boolean onInterceptTouchEvent(RecyclerView recyclerView, MotionEvent motionEvent) {
-                View child = recyclerView.findChildViewUnder(motionEvent.getX(),motionEvent.getY());
-                if(child!=null && mGestureDetector.onTouchEvent(motionEvent)){
-                    Drawer.closeDrawers();
-                    try {
-                        drawerItemSelectedAction(recyclerView.getChildPosition(child));
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    } catch (ExecutionException e) {
-                        e.printStackTrace();
-                    } catch (JSONException e) {
-                        e.printStackTrace();
-                    }
-                    //Toast.makeText(MainActivity.this,"The Item Clicked is: "+recyclerView.getChildPosition(child),Toast.LENGTH_SHORT).show();
-                    return true;
-                }
-                return false;
-            }
-
-            @Override
-            public void onTouchEvent(RecyclerView recyclerView, MotionEvent motionEvent) {
-            }
-
-            @Override
-            public void onRequestDisallowInterceptTouchEvent(boolean disallowIntercept) {
-            }
-        });
-        mLayoutManager = new LinearLayoutManager(this);                 // Creating a layout Manager
-        mRecyclerView.setLayoutManager(mLayoutManager);                 // Setting the layout Manager
-        Drawer = (DrawerLayout) findViewById(R.id.drawer_layout);        // Drawer object Assigned to the view
-        mDrawerToggle = new ActionBarDrawerToggle(this, Drawer,
-                R.drawable.ic_drawer, R.string.drawer_open,
-                R.string.drawer_close) {
-            public void onDrawerClosed(View view) {
-                getSupportActionBar().setTitle(mTitle);
-                invalidateOptionsMenu(); // creates call to
-                // onPrepareOptionsMenu()
-            }
-
-            public void onDrawerOpened(View drawerView) {
-                getSupportActionBar().setTitle(mDrawerTitle);
-                invalidateOptionsMenu(); // creates call to
-                // onPrepareOptionsMenu()
-            }
-        };
-        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-        getSupportActionBar().setHomeButtonEnabled(true);
-
-        Drawer.setDrawerListener(mDrawerToggle); // Drawer Listener set to the Drawer toggle
-        mDrawerToggle.syncState();               // Finally we set the drawer toggle sync State
-    }
-
-    private boolean checkForConnectivity(){
-        int status = GooglePlayServicesUtil.isGooglePlayServicesAvailable(getBaseContext());
-        if (status != ConnectionResult.SUCCESS) { // Google Play Services are not available
-            int requestCode = 10;
-            Dialog dialog = GooglePlayServicesUtil.getErrorDialog(status, this, requestCode);
-            dialog.show();
-            Log.d("Connectivity", "Failed");
-            return false;
-        }
-        return true;
-    }
-
-    private void setMapFragment(){
-        mProgress = ProgressDialog.show(this, "",
-                "Please Wait..", true);
-        while(currentLocationCoordinate == null) {
-            LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
-            SupportMapFragment fragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
-            mGoogleMap = fragment.getMap();
-            mGoogleMap.setOnMarkerDragListener(this);
-            mGoogleMap.setOnMapClickListener(this);
-            mGoogleMap.setMyLocationEnabled(false);
-
-            // Creating a criteria object to retrieve provider
-            Criteria criteria = new Criteria();
-
-            // Getting the name of the best provider
-            String provider = locationManager.getBestProvider(criteria, true);
-
-            // Getting Current Location
-            Location location = getLastKnownLocation(locationManager);
-
-            if (location != null) {
-                currentLocationCoordinate = new LatLng(location.getLatitude(), location.getLongitude());
-                onLocationChanged(location);
-            }
-            locationManager.requestLocationUpdates(provider, 20000, 0, this);
-        }
-        mProgress.dismiss();
-    }
-
-    private void drawerItemSelectedAction(int childPosition) throws InterruptedException, ExecutionException, JSONException {
-
-        if(currentFragmentId == childPosition) return;
-        currentFragmentId = childPosition;
-        if(sourceMarker!=null) sourceMarker.remove();
-        if(destinationMarker != null) destinationMarker.remove();
-
-        switch (childPosition){
-            case 0: //Todo show the user profile
-                    break;
-            case 1: //Todo check for connectivity for Google map api
-                    if(!checkForConnectivity()) onStop();
-                    setMapFragment();
-                    if(inRide)
-                        setStateInRide();
-                    else if(awaitingRide)
-                        setStateAwaitingRide();
-                    else if(ratingPending)
-                        setStateRatingPending();
-                    else
-                        setStateBookRide();
-                    break;
-            case 2: setUpWallet();
-                    break;
-            case 3: createChangePassDialog();
-                    break; //Todo change password dialog
-            case 4: setUpContact();
-                    break;
-            case 5: break;
-            case 6: applicationLogout();
-                    break;
-        }
-    }
-
-    @Override
-    public void onPause() {
-        super.onPause();  // Always call the superclass method first
-    }
-
-    public void saveSource(View view){
-
-        if(sourceMarker == null) {
-            Toast.makeText(getApplicationContext(), "No PickUp Location Found", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        final Double lat = sourceMarker.getPosition().latitude;
-        final Double lon = sourceMarker.getPosition().longitude;
-        // Get the layout inflater
-        LayoutInflater inflater = this.getLayoutInflater();
-        View dview = inflater.inflate(R.layout.dialog_save_favorite, null);
-        final Spinner addtype = (Spinner)dview.findViewById(R.id.address_type);
-        ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(
-                this, R.array.address_type, android.R.layout.simple_spinner_item);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        addtype.setAdapter(adapter);
-        TextView tvadd = (TextView) dview.findViewById(R.id.address);
-        tvadd.setText(sAddress[0] +", "+sAddress[1]);
-        // Add the buttons
-        builder.setView(dview)
-                // Add action buttons
-                .setPositiveButton(R.string.save, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int id) {
-                        dialog.dismiss();
-                        try {
-                            JSONObject jObject = new JSONObject();
-                            jObject.put("latitude", lat);
-                            jObject.put("longitude", lon);
-                            jObject.put("address0", sAddress[0]);
-                            jObject.put("address1", sAddress[1]);
-                            if(prefs.contains(addtype.getSelectedItem().toString())){
-                                prefs.edit().remove(addtype.getSelectedItem().toString());
-                            }
-                            prefs.edit().putString(addtype.getSelectedItem().toString(), jObject.toString()).commit();
-                        } catch (JSONException e) {
-                            Log.e("Exception", e.getMessage());
-                            Toast.makeText(getApplicationContext(), "Location not saved", Toast.LENGTH_LONG).show();
-                        }
-                    }
-                })
-                .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int id) {
-                        dialog.dismiss();
-                    }
-                });
-        // Set other dialog properties
-        // Create the AlertDialog
-
-        AlertDialog dialog = builder.create();
-        dialog.show();
-
-    }
-
-    public void saveDestination(View view){
-        if(destinationMarker == null) {
-            Toast.makeText(getApplicationContext(), "No Drop Location Found", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        final Double lat = destinationMarker.getPosition().latitude;
-        final Double lon = destinationMarker.getPosition().longitude;
-        // Get the layout inflater
-        LayoutInflater inflater = this.getLayoutInflater();
-        View dview = inflater.inflate(R.layout.save_dialog, null);
-        final Spinner addtype = (Spinner)dview.findViewById(R.id.address_type);
-        ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(
-                this, R.array.address_type, android.R.layout.simple_spinner_item);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        addtype.setAdapter(adapter);
-        TextView tvadd = (TextView) dview.findViewById(R.id.address);
-        tvadd.setText(dAddress[0] + ", "+ dAddress[1]);
-        // Add the buttons
-        builder.setView(dview)
-                // Add action buttons
-                .setPositiveButton(R.string.save, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int id) {
-                        dialog.dismiss();
-                        Double lat = destinationMarker.getPosition().latitude;
-                        Double lon = destinationMarker.getPosition().longitude;
-                        try {
-                            JSONObject jObject = new JSONObject();
-                            jObject.put("latitude", lat);
-                            jObject.put("longitude", lon);
-                            jObject.put("address0", dAddress[0]);
-                            jObject.put("address1", dAddress[1]);
-                            if (prefs.contains(addtype.getSelectedItem().toString())) {
-                                prefs.edit().remove(addtype.getSelectedItem().toString());
-                            }
-                            prefs.edit().putString(addtype.getSelectedItem().toString(), jObject.toString()).commit();
-
-
-                        } catch (JSONException e) {
-                            Log.e("Exception", e.getMessage());
-                            Toast.makeText(getApplicationContext(), "Location not saved", Toast.LENGTH_LONG).show();
-                        }
-                    }
-                })
-                .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int id) {
-                        //nothing to be done when user cancels his action
-                    }
-                });
-        // Set other dialog properties
-        // Create the AlertDialog
-
-        AlertDialog dialog = builder.create();
-
-        dialog.show();
-    }
-
-    @Override
-    protected void onStop() {
-        super.onStop();
-    }
-
-    public void sendMessageSource(View view) {
-
-        if (currentLocationCoordinate == null)
-            Toast.makeText(getApplicationContext(), "Please wait!! Searching current location",
-                    Toast.LENGTH_LONG).show();
-        else {
-            if (sourceMarker != null) sourceMarker.remove();
-            Intent intent = new Intent(MainActivity.this, SearchActivity.class);
-            intent.putExtra("Location", "S");
-            intent.putExtra("CurrentLatitude", Double.toString(currentLocationCoordinate.latitude));
-            intent.putExtra("CurrentLongitude", Double.toString(currentLocationCoordinate.longitude));
-            String[] str = {"Home", "Office", "Favorite1", "Favorite2", "Favorite3"};
-            for (int i = 0; i < 5; i++) {
-                if (prefs.contains(str[i])) {
-                    try {
-                        JSONObject jsonObject = new JSONObject(prefs.getString(str[i], null));
-                        if (jsonObject != null) intent.putExtra(str[i], jsonObject.toString());
-                    } catch (JSONException e) {
-                    }
-                }
-            }
-            startActivityForResult(intent, 2);
-        }
-    }
-
-    public void sendMessageDestination(View view) {
-
-            if (currentLocationCoordinate == null)
-                Toast.makeText(getApplicationContext(), "Please wait!! Searching current location",
-                        Toast.LENGTH_LONG).show();
-            else {
-                if (destinationMarker != null) destinationMarker.remove();
-                Intent intent = new Intent(MainActivity.this, SearchActivity.class);
-                intent.putExtra("Location", "D");
-                intent.putExtra("CurrentLatitude", Double.toString(currentLocationCoordinate.latitude));
-                intent.putExtra("CurrentLongitude", Double.toString(currentLocationCoordinate.longitude));
-                String[] str = {"Home", "Office", "Favorite1", "Favorite2", "Favorite3"};
-                for(int i = 0 ; i < 5 ; i ++){
-                    if(prefs.contains(str[i])){
-                        try{
-                            JSONObject jsonObject = new JSONObject(prefs.getString(str[i],null));
-                            if(jsonObject != null) intent.putExtra(str[i], jsonObject.toString());
-                        }catch (JSONException e){
-                        }
-                    }
-                }
-                startActivityForResult(intent, 3);
-            }
-
-    }
-
-
-    @Override
-    public void onBackPressed() {
-        moveTaskToBack(true);
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        if (resultCode != RESULT_CANCELED) {
-            Bundle bundle = data.getExtras();
-
-            Double latitude = Double.parseDouble(bundle.getString("latitude"));
-            Double longitude = Double.parseDouble(bundle.getString("longitude"));
-            String address0 = bundle.getString("address0");
-            String address1 = bundle.getString("address1");
-            IconGenerator iconFactory = new IconGenerator(this);
-
-            // check if the request code is same as what is passed  here it is 2
-            if (requestCode == 2) {
-                iconFactory.setColor(Color.GREEN);
-                sourceMarker = addIcon(iconFactory,1, new LatLng(latitude, longitude));
-                sourceMarker.isDraggable();
-                FragmentMain disp = (FragmentMain) displayFragment;
-                sAddress[0] = address0; sAddress[1] = address1;
-                disp.setTextSource(sAddress[0] + ", " + sAddress[1]);
-            } else if (requestCode == 3) {
-                iconFactory.setColor(Color.RED);
-                destinationMarker = addIcon(iconFactory, 2,new LatLng(latitude, longitude));
-                destinationMarker.isDraggable();
-
-                FragmentMain disp = (FragmentMain) displayFragment;
-                dAddress[0] = address0; dAddress[1] = address1;
-                disp.setTextDestination(dAddress[0] + ", " + dAddress[1]);
-            }
-
-            CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(new LatLng(latitude, longitude), 16);
-            mGoogleMap.animateCamera(yourLocation);
-        }
-    }
-
-    private void setStateAwaitingRide(){
-        mGoogleMap.clear();
-
-        SupportMapFragment fragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
-        mGoogleMap = fragment.getMap();
-        mGoogleMap.setOnMarkerDragListener(this) ;
-        mGoogleMap.setOnMapClickListener(this);
-        mGoogleMap.setMyLocationEnabled(false);
-
-        awaitingRide = true;
-        inRide = false;
-        ratingPending = false;
-        setup = false;
-
-        displayFragment = new FragmentMain();
-        FragmentManager fm = getSupportFragmentManager();
-
-        Bundle args = new Bundle();
-        args.putBoolean("awaitingride", awaitingRide);
-        args.putBoolean("inride", inRide);
-        args.putBoolean("ratingpending", ratingPending);
-        displayFragment.setArguments(args);
-
-        fm.beginTransaction().replace(R.id.content_frame,displayFragment).commit();
-        fm.executePendingTransactions();
-        setTitle("Awaiting Ride");
-
-        mProgress = ProgressDialog.show(this, "",
-                "Please Wait..", true);
-
-        new Thread(new Runnable() {
-            @Override
-            public void run()
-            {
-                try {
-                    //Code to execute in other thread
-                    Boolean check = false;
-                    if(!rideBooked){
-                        check = getRideDetails();
-                    }
-                    if (check || rideBooked) {
-                        System.out.println("check7");
-                        setup = true;
-                        rideBooked = false;
-                    }
-                    //Code to execute in main thread
-                    mHandler = new Handler(getApplicationContext().getMainLooper());
-                    Runnable myRunnable = new Runnable() {
-                        @Override
-                        public void run() {
-                            if (setup) {
-                                ((FragmentMain) displayFragment).setDriverDetails();
-                                initializeTimerTask();
-                                startTimer();
-                            } else {
-                                createAlertDialog("Connection Problem", "Couldn't connect to server!");
-                            }
-                        }
-                    };
-                    mHandler.postDelayed(myRunnable, 2000);
-                } catch (Exception e) {
-                    Log.d("Exception", e.getMessage());
-                }
-                Log.d("CODE", "Setting up Awaiting Ride");
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        //Code to execute in UI thread or main thread
-                        Handler handler = new Handler();
-                        handler.postDelayed(new Runnable() {
-                            public void run() {
-                                mProgress.dismiss();
-                            }
-                        }, 2000);
-                    }
-                });
-            }
-        }).start();
-    }
-
-    private boolean getRideDetails() {
-        HttpRequestTask rideRequestInfo = new HttpRequestTask();
-        try {
-            Log.d("CODE_FLOW", "CAB DETAILS_REQESTED");
-            String res = rideRequestInfo.execute("http://www.hoi.co.in/api/riderequestinfo/" + rideRequestId).get(180000, TimeUnit.MILLISECONDS);
-            System.out.println("Ride Info Request " + res);
-            JSONObject jObject, genRideRequestInfo, rideResponceInfo;
-            jObject = new JSONObject(res);
-            genRideRequestInfo = jObject.getJSONObject("grri");
-            rideResponceInfo = jObject.getJSONObject("rrd");
-            currentRideDetails = new DetailCurrentRide(genRideRequestInfo);
-            carDetails = new DetailCar(rideResponceInfo.getJSONObject("carinfo"));
-            driverDetails = new DetailDriver(rideResponceInfo);
-            cabLatestCoordinate = new LatLng(rideResponceInfo.getDouble("ridelastlong"), rideResponceInfo.getDouble("ridelastlat"));
-            Log.d("CODE_FLOW", "CAB DETAILS_RECEIVED");
-        } catch (Exception e) {
             Log.e("Exception", e.getMessage());
-            return false;
+            Toast.makeText(getApplicationContext(), "Some Problem Occured", Toast.LENGTH_SHORT).show();
+            recreate();
         }
-        return true;
-    }
-
-    private void setStateInRide() throws ExecutionException, InterruptedException {
-        mGoogleMap.clear();
-        setup = false;
-        stoptimertask();
-        if(cabMarker != null) cabMarker.remove();
-
-        awaitingRide = false;
-        inRide = true;
-        ratingPending = false;
-
-        mGoogleMap.setMyLocationEnabled(true);
-        CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(currentLocationCoordinate, 15);
-        mGoogleMap.animateCamera(yourLocation);
-
-        displayFragment = new FragmentMain();
-        FragmentManager fm = getSupportFragmentManager();
-
-        Bundle args = new Bundle();
-        args.putBoolean("awaitingride", awaitingRide);
-        args.putBoolean("inride", inRide);
-        args.putBoolean("ratingpending", ratingPending);
-
-        displayFragment.setArguments(args);
-
-        fm.beginTransaction().replace(R.id.content_frame,displayFragment).commit();
-        fm.executePendingTransactions();
-        setTitle("In Ride");
-
-        mProgress = ProgressDialog.show(this, "",
-                "Please Wait..", true);
-
-        new Thread(new Runnable() {
-            @Override
-            public void run()
-            {
-                try {
-                    //Code to execute in other thread
-                    Boolean check = getRideDetails() && getCopassengerInfo();
-                    if (check) setup = true;
-
-                    //Code to execute in main thread
-                    mHandler = new Handler(getApplicationContext().getMainLooper());
-                    Runnable myRunnable = new Runnable() {
-                        @Override
-                        public void run() {
-                            if (setup) {
-                                ((FragmentMain) displayFragment).setCopassengerLayout(coPassengers.size());
-                            } else {
-                                createAlertDialog("Connection Problem", "Couldn't connect to server!");
-                            }
-                        }
-                    };
-                    mHandler.postDelayed(myRunnable, 2000);
-                } catch (Exception e) {
-                    Log.d("Exception", e.getMessage());
-                }
-                Log.d("CODE", "Setting up rating pending");
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        //Code to execute in UI thread or main thread
-                        Handler handler = new Handler();
-                        handler.postDelayed(new Runnable() {
-                            public void run() {
-                                mProgress.dismiss();
-                            }
-                        }, 2000);
-                    }
-                });
-            }
-        }).start();
-    }
-
-    private boolean getCopassengerInfo(){
-        HttpRequestTask coPassengerInfoTask = new HttpRequestTask();
-
-        try{
-            Log.d("CODE_FLOW", "REQUEST FOR CO PASSENGER INFO");
-            String res = coPassengerInfoTask.execute(BASE_SERVER_URL+"copassengerinfo/"+rideRequestId).get(300000, TimeUnit.MILLISECONDS);
-            JSONObject jObject;
-            jObject = new JSONObject(res);
-            Log.d("DATA_CO_PASSENGER_INFO", res);
-            coPassengers = new ArrayList<CoPassenger>();
-
-            if(jObject.getInt("riderequestid1") != 0)
-                coPassengers.add(new CoPassenger(jObject.getString("coPassenger1name"),jObject.getString("coPassenger1picURL"),
-                        jObject.getInt("riderequestid1")));
-
-            if(jObject.getInt("riderequestid2") != 0)
-                coPassengers.add(new CoPassenger(jObject.getString("coPassenger2name"),jObject.getString("coPassenger2picURL"),
-                        jObject.getInt("riderequestid2")));
-
-            if(jObject.getInt("riderequestid3") != 0)
-                coPassengers.add(new CoPassenger(jObject.getString("coPassenger3name"),jObject.getString("coPassenger3picURL"),
-                        jObject.getInt("riderequestid3")));
-
-            if(jObject.getInt("riderequestid4") != 0)
-                coPassengers.add(new CoPassenger(jObject.getString("coPassenger4name"),jObject.getString("coPassenger4picURL"),
-                        jObject.getInt("riderequestid4")));
-            Log.d("CODE_FLOW", "CO PASSENGERS DATA RECEIVED");
-        }catch(Exception e){
-            Log.d("Exception", e.toString());
-            return false;
-        }
-        Log.d("CODE_FLOW", "RECEIVED CO PASSENGER INFO");
-        return true;
-    }
-
-    private void setStateBookRide(){
-        mGoogleMap.clear();
-        inRide = false;
-        awaitingRide = false;
-        ratingPending = false;
-        cabNearCheck = true;
-        setup = false;
-
-        sAddress = getAddress(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude);
-
-        displayFragment = new FragmentMain();
-        FragmentManager fm = getSupportFragmentManager();
-
-        Bundle args = new Bundle();
-        args.putBoolean("awaitingride", awaitingRide);
-        args.putBoolean("inride", inRide);
-        args.putBoolean("ratingpending", ratingPending);
-        args.putString("pickupaddress", sAddress[0] + ", " + sAddress[1]);
-
-        displayFragment.setArguments(args);
-
-        fm.beginTransaction().replace(R.id.content_frame,displayFragment).commit();
-        fm.executePendingTransactions();
-
-        setTitle("Book Ride");
-        IconGenerator iconFactory = new IconGenerator(this);
-        iconFactory.setColor(Color.GREEN);
-        sourceMarker = addIcon(iconFactory, 1, new LatLng(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude));
-        sourceMarker.isDraggable();
-
-        CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(currentLocationCoordinate, 15);
-        mGoogleMap.animateCamera(yourLocation);
-
-        setup = true;
-    }
-
-    public void setStateRatingPending() throws ExecutionException, InterruptedException {
-        mGoogleMap.clear();
-        inRide = false;
-        awaitingRide = false;
-        ratingPending = true;
-        setup = false;
-        displayFragment = new FragmentMain();
-        FragmentManager fm = getSupportFragmentManager();
-
-        Bundle args = new Bundle();
-        args.putBoolean("awaitingride", awaitingRide);
-        args.putBoolean("inride", inRide);
-        args.putBoolean("ratingpending", ratingPending);
-
-        displayFragment.setArguments(args);
-
-        fm.beginTransaction().replace(R.id.content_frame, displayFragment).commit();
-        fm.executePendingTransactions();
-
-        setTitle("Invoice");
-        mProgress = ProgressDialog.show(this, "",
-                "Please Wait..", true);
-
-        new Thread(new Runnable() {
-            @Override
-            public void run()
-            {
-                try {
-                    //Code to execute in other thread
-                    String res = (new HttpRequestTask()).execute(BASE_SERVER_URL + "closeride/" + rideRequestId).get(300000, TimeUnit.MILLISECONDS);
-                    final JSONObject rideSummary = new JSONObject(res);
-                    Boolean check = getRideDetails();
-                    if (check) setup = true;
-
-                    //Code to execute in main thread
-                    mHandler = new Handler(getApplicationContext().getMainLooper());
-                    Runnable myRunnable = new Runnable() {
-                        @Override
-                        public void run() {
-                            if (setup) {
-                                ((FragmentMain) displayFragment).setRideSummary(rideSummary);
-                            } else {
-                                createAlertDialog("Connection Problem", "Couldn't connect to server!");
-                            }
-                        }
-                    };
-                    mHandler.postDelayed(myRunnable, 2000);
-                } catch (Exception e) {
-                    Log.d("Exception", e.getMessage());
-                }
-                Log.d("CODE", "Setting up rating pending");
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        //Code to execute in UI thread or main thread
-                        Handler handler = new Handler();
-                        handler.postDelayed(new Runnable() {
-                            public void run() {
-                                mProgress.dismiss();
-                            }
-                        }, 2000);
-                    }
-                });
-            }
-        }).start();
-    }
-
-    public void requestBookRide(View view) throws ExecutionException, InterruptedException {
-        int minFare = BASECHARGE;
-        int maxFare = BASECHARGE;
-
-        if (sourceMarker != null && destinationMarker != null) {
-            final Double sLatitude = sourceMarker.getPosition().latitude;
-            final Double sLongitude = sourceMarker.getPosition().longitude;
-            final Double dLatitude = destinationMarker.getPosition().latitude;
-            final Double dLongitude = destinationMarker.getPosition().longitude;
-            AlertDialog.Builder builder = new AlertDialog.Builder(this);
-
-            float distanceTobe = calculateDistance(sLatitude, sLongitude, dLatitude, dLongitude);
-            if(distanceTobe < 0.5f) {
-                createAlertDialog("Location Nearby", "Please set drop atleast half km away!");
-                return;
-            }
-            int durationTobe = (int) calculateTime(sLatitude, sLongitude, dLatitude, dLongitude);
-
-            int tmp = (int) Math.max(Math.ceil(6 * distanceTobe
-                    + 0.5 * durationTobe), minFare);
-            if(tmp > balance){
-                createAlertDialog("Insufficient Balance!","Your balance is \u20B9" + balance);
-                return;
-            }
-
-            minFare = (int) Math.max(Math.ceil(4 * distanceTobe
-                    + 0.5 * durationTobe), minFare);
-            maxFare = (int) Math.max(Math.ceil(10 * distanceTobe
-                    + 0.5 * durationTobe), maxFare);
-            // Get the layout inflater
-            LayoutInflater inflater = this.getLayoutInflater();
-            view = inflater.inflate(R.layout.dialog_confirm, null);
-            // Add the buttons
-            builder.setView(view)
-                    // Add action buttons
-                    .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialog, int id) {
-                            dialog.dismiss();
-                            setup = false;
-                            mProgress = ProgressDialog.show(MainActivity.this, "",
-                                    "Please Wait..", true);
-
-                            new Thread(new Runnable() {
-                                @Override
-                                public void run()
-                                {
-                                        //Code to execute in other thread
-                                        JSONObject jObject = new JSONObject();
-                                        cabBookingDetails = new CabBookingDetails(sLatitude, sLongitude, sAddress[0], sAddress[1], dLatitude,
-                                                dLongitude, dAddress[0], dAddress[1]);
-
-                                        CabBookingTask bookCab = new CabBookingTask();
-                                        try {
-                                            String res = bookCab.execute("http://www.hoi.co.in/api/createriderequest").get(180000, TimeUnit.MILLISECONDS);
-                                            System.out.println(res);
-                                            jObject = new JSONObject(res);
-                                            if(jObject.getDouble("billingrate") != 0.0){
-                                                System.out.println("check1");
-                                                currentRideDetails = new DetailCurrentRide(bookCab.getCabBookingData(), jObject);
-                                                carDetails = new DetailCar(jObject.getJSONObject("carinfo"));
-                                                driverDetails = new DetailDriver(jObject);
-                                                rideRequestId = jObject.getInt("riderequestid");
-                                                cabLatestCoordinate = new LatLng(jObject.getDouble("ridelastlat"), jObject.getDouble("ridelastlong"));
-                                                rideBooked = true;
-                                                setup = true;
-                                                //setStateAwaitingRide();
-                                                Log.d("Billing Rate", "" + jObject.getDouble("billingrate"));
-                                            }
-                                            else{
-                                                System.out.println("check2");
-                                                tmpResponse = jObject.getString("drivername");
-                                            }
-                                        } catch (Exception e) {
-                                            Log.e("Exception", e.getMessage());
-                                            System.out.println("check3");
-                                        }
-
-                                        //Code to execute in main thread
-                                        mHandler = new Handler(getApplicationContext().getMainLooper());
-                                        Runnable myRunnable = new Runnable() {
-                                            @Override
-                                            public void run() {
-                                                if (setup) {
-                                                    System.out.println("check4");
-                                                    if(sourceMarker!=null) sourceMarker.remove();
-                                                    if(destinationMarker != null) destinationMarker.remove();
-                                                    mProgress.dismiss();
-                                                    setStateAwaitingRide();
-                                                } else {
-                                                    if(tmpResponse != ""){
-                                                        System.out.println("check5");
-                                                        createAlertDialog("Sorry", tmpResponse);
-                                                        tmpResponse = "";
-                                                    }
-                                                    else {
-                                                        System.out.println("check6");
-                                                        createAlertDialog("Connection Problem", "Couldn't connect to server!");
-                                                    }
-                                                }
-                                            }
-                                        };
-                                        mHandler.postDelayed(myRunnable,2000);
-
-                                    runOnUiThread(new Runnable() {
-                                        @Override
-                                        public void run() {
-                                            //Code to execute in UI thread or main thread
-                                            Handler handler = new Handler();
-                                            handler.postDelayed(new Runnable() {
-                                                public void run() {
-                                                    mProgress.dismiss();
-                                                }
-                                            }, 2000);
-                                        }
-                                    });
-                                }
-                            }).start();
-                        }
-                    })
-                    .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
-                        public void onClick(DialogInterface dialog, int id) {
-                            dialog.dismiss();
-                        }
-                    });
-            // Set other dialog properties
-            // Create the AlertDialog
-            AlertDialog dialog = builder.create();
-
-
-            TextView source = (TextView) view.findViewById(R.id.source);
-            source.setText(sAddress[0] + ", " +sAddress[1]);
-            TextView destination = (TextView) view.findViewById(R.id.destination);
-            destination.setText(dAddress[0] +", " + dAddress[1]);
-            TextView fare = (TextView) view.findViewById(R.id.fare);
-            fare.setText("\u20B9" + minFare + " - \u20B9" + maxFare);
-            dialog.show();
-
-        } else {
-
-            Toast.makeText(getApplicationContext(), "PickUp or Drop Location not set!!",
-                    Toast.LENGTH_LONG).show();
-        }
-    }
-
-    public void requestCancelRide(View view) throws ExecutionException, InterruptedException, JSONException, ParseException {
-
-        float cost = BASECHARGE;
-
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm");
-        Date currentTime = sdf.parse(sdf.format(new Date()));
-        if(currentRideDetails.bookingTime.contains("/"))
-            sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
-        Date bookingTime = sdf.parse((currentRideDetails.bookingTime));
-        long difference = currentTime.getTime() - bookingTime.getTime();
-        int min = (int) (difference) / (1000*60);
-
-
-        float distanceTobe = calculateDistance(currentRideDetails.sourceCoordinates.latitude,
-                currentRideDetails.sourceCoordinates.longitude, cabLatestCoordinate.latitude,
-                cabLatestCoordinate.longitude);
-        int durationTobe = (int)calculateTime(currentRideDetails.sourceCoordinates.latitude,
-                currentRideDetails.sourceCoordinates.longitude, cabLatestCoordinate.latitude,
-                cabLatestCoordinate.longitude);
-
-        if (min < 5.0)
-            cost = 0;
-        else if (durationTobe < 10)
-            cost = 100;
-        else
-            cost = 30;
-
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-
-        // Get the layout inflater
-        LayoutInflater inflater = this.getLayoutInflater();
-        View dView = inflater.inflate(R.layout.dialog_cancel_ride, null);
-        // Add the buttons
-
-        builder.setView(dView)
-                // Add action buttons
-                .setPositiveButton(R.string.accept, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int id) {
-                        // todo when user cancels ride
-
-                        dialog.dismiss();
-                        setup = false;
-                        mProgress = ProgressDialog.show(MainActivity.this, "",
-                                "Please Wait..", true);
-
-                        new Thread(new Runnable() {
-                            @Override
-                            public void run()
-                            {
-                                //Code to execute in other thread
-                                try {
-                                    HttpRequestTask cancelRide = new HttpRequestTask();
-                                    String cancelRideResult = cancelRide.execute("http://www.hoi.co.in/api/cancelride/" + rideRequestId).get();
-                                    JSONObject jsonObject = new JSONObject(cancelRideResult);
-                                    int refAmount = jsonObject.getInt("refund");
-                                    if (refAmount <= -30)
-                                        balance += refAmount;
-                                    setup = true;
-                                } catch (Exception e) {
-                                    Log.e("Exception", e.getMessage());
-                                    System.out.println("check3");
-                                }
-
-                                //Code to execute in main thread
-                                mHandler = new Handler(getApplicationContext().getMainLooper());
-                                Runnable myRunnable = new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        if (setup) {
-                                            stoptimertask();
-                                            setStateBookRide();
-                                            setup = false;
-                                        } else {
-                                                createAlertDialog("Connection Problem", "Couldn't connect to server!");
-                                        }
-                                    }
-                                };
-                                mHandler.postDelayed(myRunnable,2000);
-
-                                runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        //Code to execute in UI thread or main thread
-                                        Handler handler = new Handler();
-                                        handler.postDelayed(new Runnable() {
-                                            public void run() {
-                                                mProgress.dismiss();
-                                            }
-                                        }, 2000);
-                                    }
-                                });
-                            }
-                        }).start();
-                    }
-                })
-                .setNegativeButton(R.string.decline, new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int id) {
-                        //nothing to be done when user cancels his action
-                    }
-                });
-        // Set other dialog properties
-        // Create the AlertDialog
-
-        AlertDialog dialog = builder.create();
-        final TextView tvCost = (TextView) dView.findViewById(R.id.cancelcost);
-        tvCost.setText("\u20B9"+ cost);
-        dialog.show();
-    }
-
-    public void viewNextLocation(View view){
-        if(nextCabDestination != null){
-            findDirections(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude,//28.612936, 77.229483,GMapV2Direction.MODE_DRIVING);
-                    nextCabDestination.latitude, nextCabDestination.longitude, GMapV2Direction.MODE_DRIVING);
-            IconGenerator iconFactory = new IconGenerator(this);
-            iconFactory.setColor(Color.GREEN);
-            nextStopMarker = addIcon(iconFactory, 3, nextCabDestination);
-
-        }else{
-            Toast.makeText(getApplicationContext(), "No next cab destination", Toast.LENGTH_LONG).show();
-        }
-
-    }
-
-    public void submitDriverRating(View view){
-        int rating = ((FragmentMain)displayFragment).getDriverRating();
-        if (rating != 0)
-            new HttpRequestTask().execute(BASE_SERVER_URL + "ratedriver/" + rideRequestId + "/" + rating);
-        Handler handler = new Handler();
-        handler.postDelayed(new Runnable() {
-            public void run() {
-                setStateBookRide();
-                Log.d("CODE", "Setting up wallet");
-            }
-        }, 1000);
-
     }
 
     /*
-     * Navigation Drawer related funtions
-     * dataList.add(new DrawerItem("Settings", R.drawable.ic_action_settings));
+     * Activity UI Handling Functions
      */
+
+    private void setupMapFragment() {
+        //Setting up map fragment
+        LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        SupportMapFragment fragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
+        mGoogleMap = fragment.getMap();
+        mGoogleMap.setOnMapClickListener(this);
+        mGoogleMap.setMyLocationEnabled(true);
+
+        // Creating a criteria object to retrieve provider
+        Criteria criteria = new Criteria();
+
+        // Getting the name of the best provider
+        String provider = locationManager.getBestProvider(criteria, true);
+
+        // Getting Current Location
+        Location location = getLastKnownLocation(locationManager);
+
+        if (location != null) {
+            currentLocationCoordinate = new LatLng(location.getLatitude(), location.getLongitude());
+            onLocationChanged(location);
+        }
+        locationManager.requestLocationUpdates(provider, 20000, 0, this);
+    }
+
+    public void setDestination() {
+
+        if(mGoogleMap != null) mGoogleMap.clear();
+        if(nextDestination == null) return;
+        //Todo update map fragment
+        if(currentLocationCoordinate != null && (nextDestination.latitude != currentLocationCoordinate.latitude || nextDestination.longitude != currentLocationCoordinate.longitude)){
+            try{
+                findDirections(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude,
+                        nextDestination.latitude, nextDestination.longitude, GMapV2Direction.MODE_DRIVING);
+                nextPathSet = true;
+            }catch(Exception e){
+                Log.e("Exception", e.getMessage());
+                nextPathSet = false;
+            }
+        }
+        IconGenerator iconFactory = new IconGenerator(this);
+        iconFactory.setColor(Color.GREEN);
+        addIcon(iconFactory, "Next", nextDestination);
+    }
+
+    public void setUpHome(String address) {
+        displayFragment = new FragmentMain();
+        mNextDestination.setText(address);
+        FragmentManager fm = getSupportFragmentManager();
+        fm.beginTransaction().replace(R.id.content_frame, displayFragment).commit();
+        setTitle("Home");
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        //No call for super(). Bug on API Level > 11.
+    }
 
     @Override
     public void setTitle(CharSequence title) {
@@ -1218,18 +291,631 @@ public class MainActivity extends ActionBarActivity implements android.location.
         getSupportActionBar().setTitle(mTitle);
     }
 
-    @Override
-    protected void onPostCreate(Bundle savedInstanceState) {
-        super.onPostCreate(savedInstanceState);
-        // Sync the toggle state after onRestoreInstanceState has occurred.
-        mDrawerToggle.syncState();
+    private Marker addIcon(IconGenerator iconFactory, String text, LatLng position) {
+        MarkerOptions markerOptions = new MarkerOptions().
+                icon(BitmapDescriptorFactory.fromBitmap(iconFactory.makeIcon(text))).
+                position(position).
+                anchor(iconFactory.getAnchorU(), iconFactory.getAnchorV()).draggable(true);
+
+        return mGoogleMap.addMarker(markerOptions);
     }
 
     @Override
-    public void onConfigurationChanged(Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
-        // Pass any configuration change to the drawer toggles
-        mDrawerToggle.onConfigurationChanged(newConfig);
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu items for use in the action bar
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.main, menu);
+        return super.onCreateOptionsMenu(menu);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Handle presses on the action bar items
+        switch (item.getItemId()) {
+            case R.id.action_search:
+                return true;
+            case R.id.action_pending_pay:
+                getPendingPay();
+                return true;
+            case R.id.action_money_so_far:
+                getMoneyMade();
+                return true;
+            case R.id.start_accepting_ride:
+                requestStartAcceptingRide();
+                return true;
+            case R.id.stop_accepting_ride:
+                requestStopAcceptingRide();
+                return true;
+            case R.id.logout:
+                try {
+                    applicationLogout();
+                } catch (Exception e) {
+                    Toast.makeText(getApplicationContext(), "Logout Failed", Toast.LENGTH_SHORT).show();
+                    Log.e("Exception", e.getMessage());
+                    recreate();
+                }
+                return true;
+            default:
+                return super.onOptionsItemSelected(item);
+        }
+    }
+
+
+    /*
+     * Driver Action Function
+     */
+
+    private void getPendingPay() {
+        //Todo create dialog to show pending pay
+
+        if(!isConnceted()) {
+            Toast.makeText(getApplicationContext(), "No Internet Connectivity", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        setup = false;
+        mProgress = ProgressDialog.show(this, "",
+                "Please Wait..", true);
+        mProgress.setCancelable(false);
+
+
+
+        new Thread(new Runnable() {
+            @Override
+            public void run()
+            {
+                //Code to execute in other thread
+                try{
+                    String res = new HttpRequestTask().execute("http://www.hoi.co.in/dapi/pendingpay").get(120000, TimeUnit.MILLISECONDS);
+                    JSONArray jsonArray = new JSONArray(res);
+                    pendingPayList = new ArrayList<PendingPayItem>();
+                    for(int i = 0; i < jsonArray.length() ; i++){
+                        PendingPayItem tmp = new PendingPayItem((JSONObject) jsonArray.get(i));
+                        pendingPayList.add(tmp);
+                    }
+                    setup = true;
+                }catch(Exception e){
+                    Log.e("Exception", e.getMessage());
+                }
+
+
+                //Code to execute in main thread
+                mHandler = new Handler(getApplicationContext().getMainLooper());
+                Runnable myRunnable = new Runnable() {
+                    @Override
+                    public void run() {
+                        mProgress.dismiss();
+                        if (setup) {
+                            Dialog dialog = new Dialog(MainActivity.this);
+                            dialog.setContentView(R.layout.list_passenger);
+                            ListView pendingPayListView = (ListView) dialog.findViewById(R.id.lv);
+                            PendingPayListAdapter pendingPayListAdapter = new PendingPayListAdapter(MainActivity.this, pendingPayList, getResources());
+                            pendingPayListView.setAdapter(pendingPayListAdapter);
+                            dialog.setCancelable(true);
+                            dialog.setTitle("Pending Pay");
+                            dialog.show();
+                            setup = false;
+                        }else {
+                            Toast.makeText(getApplicationContext(),"pending pay failed",Toast.LENGTH_SHORT ).show();
+                        }
+                    }
+                };
+                mHandler.postDelayed(myRunnable, 500);
+                Log.d("CODE", "Pending Pay");
+            }
+        }).start();
+    }
+
+    private void getMoneyMade(){
+        //Todo show money made so far
+        if(!isConnceted()) {
+            Toast.makeText(getApplicationContext(), "No Internet Connectivity", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        setup = false;
+        mProgress = ProgressDialog.show(this, "",
+                "Please Wait..", true);
+        mProgress.setCancelable(false);
+
+        new Thread(new Runnable() {
+            @Override
+            public void run()
+            {
+                //Code to execute in other thread
+                try{
+                    String res = new HttpRequestTask().execute("http://www.hoi.co.in/dapi/moneysofar/").get(120000, TimeUnit.MILLISECONDS);
+                    JSONObject response = new JSONObject(res);
+                    distanceFare = response.getInt("totaldistfare");
+                    timeFare = response.getInt("totaltimefare");
+                    totalFare = response.getInt("totalfare");
+                    setup = true;
+                }catch(Exception e){
+                    Log.e("Exception", e.getMessage());
+                }
+
+
+                //Code to execute in main thread
+                mHandler = new Handler(getApplicationContext().getMainLooper());
+                Runnable myRunnable = new Runnable() {
+                    @Override
+                    public void run() {
+                        mProgress.dismiss();
+                        if (setup) {
+                            createMoneyMadeDialog();
+                            setup = false;
+                        } else {
+                            Toast.makeText(getApplicationContext(), "Money Made Details failed", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                };
+                mHandler.postDelayed(myRunnable, 500);
+                Log.d("CODE", "MoneyMade");
+            }
+        }).start();
+    }
+
+    public void gotoDestLocation(){
+        if(nextDestination != null){
+            CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(nextDestination, 15);
+            mGoogleMap.animateCamera(yourLocation);
+        }
+        else{
+            Toast.makeText(getApplicationContext(), "No Destination Found", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    public void requestCancelRide(View view){
+        if(!isConnceted()) {
+            Toast.makeText(getApplicationContext(), "No Internet Connectivity", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        setup = false;
+        if(arrived) {
+
+            mProgress = ProgressDialog.show(this, "",
+                    "Please Wait..", true);
+            mProgress.setCancelable(false);
+
+            new Thread(new Runnable() {
+                @Override
+                public void run()
+                {
+                    //Code to execute in other thread
+                    try{
+                        String res = new HttpRequestTask(getPostRequestData()).execute("http://www.hoi.co.in/dapi/cancelride/" + nextPassenger.getId()).get(120000, TimeUnit.MILLISECONDS);
+                        JSONObject response = new JSONObject(res);
+
+                        if(response.getBoolean("requestaccepted")){
+                            JSONObject rideInfo = response.getJSONObject("rideinfo");
+                            if( rideInfo.isNull("rider1id") || (rideInfo.getInt("rider1id") < 0)){
+                                setup = false;
+                            }else{
+                                arrived = rideInfo.getBoolean("next_arrived");
+                                parseResponse(rideInfo);
+                                getAppState(rideInfo);
+                                setup = true;
+
+                            }
+                        }else{
+                            resp = response.getString("message");
+                        }
+                    }catch(Exception e){
+                        Log.e("Exception", e.getMessage());
+                    }
+
+
+                    //Code to execute in main thread
+                    mHandler = new Handler(getApplicationContext().getMainLooper());
+                    Runnable myRunnable = new Runnable() {
+                        @Override
+                        public void run() {
+                            mProgress.dismiss();
+                            if (setup) {
+                                if(nextDestinationChanged || !nextPathSet){
+                                    nextPathSet = false;
+                                    setDestination();
+                                    nextDestinationChanged = false;
+                                }
+                                if(nextPassengerChanged){
+                                    if(nextPassenger == null){
+                                        setUpHome("No Destination");
+                                        nextPassengerChanged = false;
+                                    }else{
+                                        setUpHome(nextPassenger.getAddress());
+                                        nextPassengerChanged = false;
+                                    }
+                                }
+                                setup = false;
+                            } else if(resp!= ""){
+                                Toast.makeText(getApplicationContext(),resp, Toast.LENGTH_LONG).show();
+                                resp = "";
+                            }else {
+                                Toast.makeText(getApplicationContext(),"Error Occured, CancelRide Failed", Toast.LENGTH_LONG).show();
+                            }
+                        }
+                    };
+                    mHandler.postDelayed(myRunnable, 500);
+                    Log.d("CODE", "Stop Ride");
+                }
+            }).start();
+        }
+        else{
+            Toast.makeText(getApplicationContext(), "You haven't Arrived", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    public void requestStartRide(View view){
+        if(!isConnceted()) {
+            Toast.makeText(getApplicationContext(), "No Internet Connectivity", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        setup = false;
+        if(arrived){
+
+            mProgress = ProgressDialog.show(this, "",
+                    "Please Wait..", true);
+            mProgress.setCancelable(false);
+
+            new Thread(new Runnable() {
+                @Override
+                public void run()
+                {
+                    //Code to execute in other thread
+                    try{
+                        JSONObject data = new JSONObject();
+                        data.accumulate("ridelastlong", Math.round(currentLocationCoordinate.longitude*10000.0)/10000.0);
+                        data.accumulate("ridelastlat", Math.round(currentLocationCoordinate.latitude * 10000.0)/10000.0);
+                        String res = new HttpRequestTask(data).execute("http://www.hoi.co.in/dapi/startride/"+nextPassenger.getId()).get(120000, TimeUnit.MILLISECONDS);
+                        JSONObject response = new JSONObject(res);
+                        if(response.getBoolean("requestaccepted")){
+                            JSONObject rideInfo = response.getJSONObject("rideinfo");
+                            if( rideInfo.isNull("rider1id") || (rideInfo.getInt("rider1id") < 0)){
+                                setup = false;
+                            }else{
+                                arrived = rideInfo.getBoolean("next_arrived");
+                                parseResponse(rideInfo);
+                                getAppState(rideInfo);
+                                setup = true;
+                            }
+                        }else{
+                            resp = response.getString("message");
+                        }
+                    }catch(Exception e){
+                        Log.e("Exception", e.getMessage());
+                    }
+
+
+                    //Code to execute in main thread
+                    mHandler = new Handler(getApplicationContext().getMainLooper());
+                    Runnable myRunnable = new Runnable() {
+                        @Override
+                        public void run() {
+                            mProgress.dismiss();
+                            if (setup) {
+                                if(nextDestinationChanged|| !nextPathSet){
+                                    nextPathSet = false;
+                                    setDestination();
+                                    nextDestinationChanged = false;
+                                }
+
+                                if(nextPassengerChanged){
+                                    if(nextPassenger == null){
+                                        setUpHome("No Destination");
+                                        nextPassengerChanged = false;
+                                    }else{
+                                        setUpHome(nextPassenger.getAddress());
+                                        nextPassengerChanged = false;
+                                    }
+                                }
+
+                                setup = false;
+                            } else if(resp!= ""){
+                                Toast.makeText(getApplicationContext(),resp, Toast.LENGTH_LONG).show();
+                                resp = "";
+                            }else {
+                                Toast.makeText(getApplicationContext(),"Error Occured, StartRide Failed", Toast.LENGTH_LONG).show();
+                            }
+                        }
+                    };
+                    mHandler.postDelayed(myRunnable,500);
+                    Log.d("CODE", "Stop Ride");
+                }
+            }).start();
+
+        }else{
+            mProgress = ProgressDialog.show(this, "",
+                    "Please Wait..", true);
+            mProgress.setCancelable(false);
+
+            new Thread(new Runnable() {
+                @Override
+                public void run()
+                {
+                    //Code to execute in other thread
+                    try{
+                        String res = new HttpRequestTask(getPostRequestData()).execute("http://www.hoi.co.in/dapi/updatearrival/"+nextPassenger.getId()).get(120000, TimeUnit.MILLISECONDS);
+                        JSONObject response = new JSONObject(res);
+                        if(response.getBoolean("requestaccepted")){
+                            JSONObject rideInfo = response.getJSONObject("rideinfo");
+                            if( rideInfo.isNull("rider1id") || (rideInfo.getInt("rider1id") < 0)){
+                                setup = false;
+                            }else{
+                                arrived = rideInfo.getBoolean("next_arrived");
+                                parseResponse(rideInfo);
+                                getAppState(rideInfo);
+                                setup = true;
+                            }
+                        }else{
+                            resp = response.getString("message");
+                        }
+                    }catch(Exception e){
+                        Log.e("Exception", e.getMessage());
+                    }
+
+
+                    //Code to execute in main thread
+                    mHandler = new Handler(getApplicationContext().getMainLooper());
+                    Runnable myRunnable = new Runnable() {
+                        @Override
+                        public void run() {
+                            mProgress.dismiss();
+                            if (setup){
+                                ((FragmentMain) displayFragment).changeStatetoArrived();
+                                if(nextDestinationChanged|| !nextPathSet){
+                                    nextPathSet = false;
+                                    setDestination();
+                                    nextDestinationChanged = false;
+                                }
+                                if(nextPassengerChanged){
+                                    if(nextPassenger == null){
+                                        setUpHome("No Destination");
+                                        nextPassengerChanged = false;
+                                    }else{
+                                        setUpHome(nextPassenger.getAddress());
+                                        nextPassengerChanged = false;
+                                    }
+                                }
+                                setup = false;
+                            } else if(resp!= ""){
+                                Toast.makeText(getApplicationContext(), resp, Toast.LENGTH_LONG).show();
+                                resp = "";
+                            }else {
+                                Toast.makeText(getApplicationContext(),"Error occured, Arrived Failed", Toast.LENGTH_LONG).show();
+                            }
+                        }
+                    };
+                    mHandler.postDelayed(myRunnable, 2000);
+                    Log.d("CODE", "Arrived Ride");
+                }
+            }).start();
+        }
+    }
+
+    public void requestStopRide(final int id){
+        if(!isConnceted()) {
+            Toast.makeText(getApplicationContext(), "No Internet Connectivity", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        setup = false;
+        mProgress = ProgressDialog.show(this, "",
+                "Please Wait..", true);
+        mProgress.setCancelable(false);
+
+        new Thread(new Runnable() {
+            @Override
+            public void run()
+            {
+                //Code to execute in other thread
+                try{
+                    JSONObject data = new JSONObject();
+                    data.accumulate("ridelastlong", Math.round(currentLocationCoordinate.longitude*10000.0)/10000.0);
+                    data.accumulate("ridelastlat", Math.round(currentLocationCoordinate.latitude * 10000.0)/10000.0);
+                    String res = new HttpRequestTask(data).execute("http://www.hoi.co.in/dapi/stopride/"+id).get(120000, TimeUnit.MILLISECONDS);
+                    JSONObject response = new JSONObject(res);
+
+                    if(response.getBoolean("requestaccepted")){
+                        JSONObject rideInfo = response.getJSONObject("rideinfo");
+                        if( rideInfo.isNull("rider1id") || (rideInfo.getInt("rider1id") < 0)){
+                            setup = false;
+                        }else{
+                            parseResponse(rideInfo);
+                            getAppState(rideInfo);
+                            setup = true;
+                        }
+                    }else{
+                        resp = response.getString("message");
+                    }
+                }catch(Exception e){
+                    Log.e("Exception", e.getMessage());
+                }
+
+
+                //Code to execute in main thread
+                mHandler = new Handler(getApplicationContext().getMainLooper());
+                Runnable myRunnable = new Runnable() {
+                    @Override
+                    public void run() {
+                        mProgress.dismiss();
+                        if (setup) {
+                            if(nextDestinationChanged || !nextPathSet){
+                                nextPathSet = false;
+                                setDestination();
+                                nextDestinationChanged = false;
+                            }
+                            if(nextPassengerChanged){
+                                if(nextPassenger == null){
+                                    setUpHome("No Destination");
+                                    nextPassengerChanged = false;
+                                }else{
+                                    setUpHome(nextPassenger.getAddress());
+                                    nextPassengerChanged = false;
+                                }
+                            }
+                            setup = false;
+                        } else if(resp!= ""){
+                            Toast.makeText(getApplicationContext(), resp, Toast.LENGTH_LONG).show();
+                            resp = "";
+                        }else {
+                            Toast.makeText(getApplicationContext(), "Error Occured, StopRide Failed", Toast.LENGTH_LONG).show();
+                        }
+                    }
+                };
+                mHandler.postDelayed(myRunnable, 2000);
+                Log.d("CODE", "Stop Ride");
+            }
+        }).start();
+    }
+
+    public void makecallPassenger(View view){callNumber(nextPassenger.getPhone());}
+
+    public void requestStartAcceptingRide() {
+        if(!isConnceted()) {
+            Toast.makeText(getApplicationContext(), "No Internet Connectivity", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        setup = false;
+        mProgress = ProgressDialog.show(this, "",
+                "Please Wait..", true);
+        mProgress.setCancelable(false);
+
+        new Thread(new Runnable() {
+            @Override
+            public void run()
+            {
+                //Code to execute in other thread
+                try{
+                    String res = new HttpRequestTask().execute("http://www.hoi.co.in/dapi/startacceptingride").get(120000, TimeUnit.MILLISECONDS);
+                    JSONObject rideInfo = new JSONObject(res);
+                    if( rideInfo.isNull("rider1id") || (rideInfo.getInt("rider1id") < 0)){
+                        setup = false;
+                    }else{
+                        parseResponse(rideInfo);
+                        getAppState(rideInfo);
+                        setup = true;
+                    }
+                }catch(Exception e){
+                    Log.e("Exception", e.getMessage());
+                }
+
+
+                //Code to execute in main thread
+                mHandler = new Handler(getApplicationContext().getMainLooper());
+                Runnable myRunnable = new Runnable() {
+                    @Override
+                    public void run() {
+                        mProgress.dismiss();
+                        if (setup) {
+                            if(nextDestinationChanged|| !nextPathSet){
+                                nextPathSet = false;
+                                setDestination();
+                                nextDestinationChanged = false;
+                            }
+                            if(nextPassengerChanged){
+                                if(nextPassenger == null){
+                                    setUpHome("No Destination");
+                                    nextPassengerChanged = false;
+                                }else{
+                                    setUpHome(nextPassenger.getAddress());
+                                    nextPassengerChanged = false;
+                                }
+                            }
+                            setup = false;
+                        }else {
+                            Toast.makeText(getApplicationContext(), "Error Occured, Start Accepting Ride failed", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                };
+                mHandler.postDelayed(myRunnable, 500);
+                Log.d("CODE", "Start Accepting Ride");
+            }
+        }).start();
+    }
+
+    public void requestStopAcceptingRide() {
+        if(!isConnceted()) {
+            Toast.makeText(getApplicationContext(), "No Internet Connectivity", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        setup = false;
+        mProgress = ProgressDialog.show(this, "",
+                "Please Wait..", true);
+        mProgress.setCancelable(false);
+
+        new Thread(new Runnable() {
+            @Override
+            public void run()
+            {
+                //Code to execute in other thread
+                try{
+                    String res = new HttpRequestTask().execute("http://www.hoi.co.in/dapi/stopacceptingride").get(120000, TimeUnit.MILLISECONDS);
+                    JSONObject rideInfo = new JSONObject(res);
+                    if( rideInfo.isNull("rider1id") || (rideInfo.getInt("rider1id") < 0)){
+                        setup = false;
+                    }else{
+                        parseResponse(rideInfo);
+                        getAppState(rideInfo);
+                        setup = true;
+                    }
+                }catch(Exception e){
+                    Log.e("Exception", e.getMessage());
+                }
+
+
+                //Code to execute in main thread
+                mHandler = new Handler(getApplicationContext().getMainLooper());
+                Runnable myRunnable = new Runnable() {
+                    @Override
+                    public void run() {
+                        mProgress.dismiss();
+                        if (setup) {
+                            if(nextDestinationChanged|| !nextPathSet){
+                                nextPathSet = false;
+                                setDestination();
+                                nextDestinationChanged = false;
+                            }
+                            if(nextPassengerChanged){
+                                if(nextPassenger == null){
+                                    setUpHome("No Destination");
+                                    nextPassengerChanged = false;
+                                }else{
+                                    setUpHome(nextPassenger.getAddress());
+                                    nextPassengerChanged = false;
+                                }
+                            }
+                            setup = false;
+                        }else {
+                            Toast.makeText(getApplicationContext(), "Error Occured, Stop Accepting Ride failed", Toast.LENGTH_LONG).show();
+                        }
+                    }
+                };
+                mHandler.postDelayed(myRunnable,500);
+                Log.d("CODE", "Stop Ride");
+            }
+        }).start();
+    }
+
+    public void requestRefresh(View view){
+        updateLocation();
+    }
+
+    private void applicationLogout() throws ExecutionException, InterruptedException, JSONException {
+        String res = (new HttpRequestTask()).execute("http://www.hoi.co.in/dapi/logout").get();
+        JSONObject data = new JSONObject(res);
+        if(data.getBoolean("loggedout") == true){
+            Toast.makeText(getApplicationContext(), data.getString("reason"), Toast.LENGTH_LONG).show();
+            prefs.edit().remove("username");
+            prefs.edit().remove("password");
+            prefs.edit().commit();
+            super.finish();
+        }else {
+            createAlertDialog("Logout Failed", data.getString("reason"));
+        }
+    }
+
+    private void callNumber(String phoneNumber){
+        String uri = "tel:" + phoneNumber.trim();
+        Intent intent = new Intent(Intent.ACTION_DIAL);
+        intent.setData(Uri.parse(uri));
+        startActivity(intent);
     }
 
  /*
@@ -1256,376 +942,179 @@ public class MainActivity extends ActionBarActivity implements android.location.
         return bestLocation;
     }
 
-    private Marker addIcon(IconGenerator iconFactory, int type, LatLng position) {
-        MarkerOptions markerOptions;
-        if(type == 1){
-            markerOptions = new MarkerOptions().
-                    icon(BitmapDescriptorFactory.fromResource(R.drawable.pickup)).
-                    position(position).
-                    anchor(iconFactory.getAnchorU(), iconFactory.getAnchorV()).draggable(true);
-        }else if(type == 2){
-            markerOptions = new MarkerOptions().
-                    icon(BitmapDescriptorFactory.fromResource(R.drawable.drop)).
-                    position(position).
-                    anchor(iconFactory.getAnchorU(), iconFactory.getAnchorV()).draggable(true);
-        }else{
-            markerOptions = new MarkerOptions().
-                    icon(BitmapDescriptorFactory.fromResource(R.drawable.car)).
-                    position(position).
-                    anchor(iconFactory.getAnchorU(), iconFactory.getAnchorV()).draggable(true);
-        }
-        return mGoogleMap.addMarker(markerOptions);
-    }
-
     @Override
     public void onLocationChanged(Location location) {
-
         // Getting latitude of the current location
         double latitude = location.getLatitude();
 
         // Getting longitude of the current location
         double longitude = location.getLongitude();
 
-        if(inRide && setup){
-            float segmentDistance = calculateDistance(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude,
-                    latitude, longitude);
-            int segmentDuration = (int) calculateTime(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude,
+        if(currentLocationCoordinate != null){
+            double segmentTravelled =  calculateDistance(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude,
                     latitude, longitude);
 
-            currentRideDetails.distanceIncurred += segmentDistance;
-            currentRideDetails.timeIncurred += segmentDuration;
-            currentRideDetails.costIncurred += billingRate * segmentDistance + 0.5f * segmentDuration;
+            //todo evaluate income
+            distanceTravelled += segmentTravelled;
+            distanceCharge += distanceCharge + segmentTravelled * incomeRate[passengers.size()];
+            estimatedFare = distanceCharge + 0.5 * estimatedTime();
 
-            // Creating a LatLng object for the current location
             currentLocationCoordinate = new LatLng(latitude, longitude);
-
-            UpdateRideTask updateRide = new UpdateRideTask();
-            updateRide.execute("http://www.hoi.co.in/api/update/" + rideRequestId);
 
             CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(currentLocationCoordinate, 15);
             mGoogleMap.animateCamera(yourLocation);
-        }
-    }
 
-
-
-    /*
-     * Awaiting ride user state related methods
-     */
-
-    public void startTimer() {
-        //set a new Timer
-        timer = new Timer();
-        //initialize the TimerTask's job
-        initializeTimerTask();
-        //schedule the timer, the TimerTask will run every half minute
-        timer.schedule(timerTask, 1000, 100000); //
-    }
-
-    public void stoptimertask() {
-        //stop the timer, if it's not already null
-        if (timer != null) {
-            timer.cancel();
-            timer = null;
-        }
-    }
-
-    public void initializeTimerTask() {
-        timerTask = new TimerTask() {
-            public void run() {
-                handler.post(new Runnable() {
-                    public void run() {
-                        trackRide();
-                    }
-                });
+            if(!checkUpdateRide){
+                checkUpdateRide = true;
+                updateLocation();
             }
-        };
+        }
     }
 
-    public void trackRideAction(View view){
-        trackRide();
-    }
-
-    public void trackRide(){
-
+    private void updateLocation(){
+        if(!isConnceted()){
+            return;
+        }
+        setup = false;
+        counter++;
         new Thread(new Runnable() {
             @Override
             public void run()
             {
-                setup = false;
-                tmpResponse = "";
-                try {
-                    //Code to execute in other thread
-                    HttpRequestTask trackRide = new HttpRequestTask();
-                    try {
-                        String res = trackRide.execute("http://www.hoi.co.in/api/track/" + rideRequestId).get();
-                        System.out.println(res);
-                        JSONObject jObject = new JSONObject(res);
-                        cabLatestCoordinate = new LatLng(jObject.getDouble("ridelastlat"), jObject.getDouble("ridelastlong"));
+                //Code to execute in other thread
 
-                        LatLng source = new LatLng(currentRideDetails.sourceCoordinates.latitude, currentRideDetails.sourceCoordinates.longitude);
-                        double time = calculateTime(source.latitude, source.longitude, cabLatestCoordinate.latitude, cabLatestCoordinate.longitude);
-                        if(time < 5.0 && cabNearCheck) {
-                            cabNearCheck = false;
-                            tmpResponse = "cabisnear";
+                try{
+                    JSONObject jObject = new JSONObject();
+                    jObject.accumulate("ridelastlat", Math.round(currentLocationCoordinate.latitude * 10000.0)/10000.0);
+                    jObject.accumulate("ridelastlong", Math.round(currentLocationCoordinate.longitude * 10000.0)/10000.0);
+                    jObject.accumulate("estimateddistance", Math.round(distanceTravelled*100.0)/100.0);
+                    jObject.accumulate("estimatedtime", estimatedTime());
+                    jObject.accumulate("estimatedfare", Math.round(estimatedFare * 100.0)/100.0);
+                    try{
+                        if(counter % 10 == 0){
+                            Geocoder gcd = new Geocoder(MainActivity.this, Locale.getDefault());
+                            List<Address> addresses = gcd.getFromLocation(currentLocationCoordinate.latitude,
+                                    currentLocationCoordinate.longitude, 1);
+                            if (addresses.size() > 0 && addresses.get(0).getAdminArea() != null)
+                                jObject.accumulate("state", addresses.get(0).getAdminArea());
+                            else
+                                jObject.accumulate("state", "");
+                            counter = 0;
                         }
-                        if(jObject.getBoolean("rideunderway") == true){
-                            nextCabDestination = new LatLng(jObject.getDouble("nextdestlat"), jObject.getDouble("nextdestlong"));
-                            awaitingRide = false;
-                            inRide = true;
+                        else{
+                            jObject.accumulate("state", "");
                         }
-                        if(jObject.getBoolean("ridecancelled") == true){
-                            awaitingRide = false;
-                        }
-                        setup = true;
                     }catch(Exception e){
-                        Log.e("Exception", e.getMessage());
+                        jObject.accumulate("state", "");
                     }
-                    //Code to execute in main thread
-                    mHandler = new Handler(getApplicationContext().getMainLooper());
-                    Runnable myRunnable = new Runnable() {
-                        @Override
-                        public void run() {
-                            if (setup) {
-                                if(tmpResponse != "") {
-                                    createAlertDialog("Cab is here!", "Your Cab is 5 minutes away..");
-                                    createNotification("Alert", "Cab is 5 minutes away");
-                                }
-                                if(cabMarker != null) cabMarker.remove();
-                                mGoogleMap.clear();
-                                IconGenerator iconFactory = new IconGenerator(MainActivity.this);
-                                iconFactory.setColor(Color.YELLOW);
-                                cabMarker = addIcon(iconFactory, 3, cabLatestCoordinate);
-                                cabMarker.setDraggable(false);
-
-                                CameraUpdate cabLocation = CameraUpdateFactory.newLatLngZoom(cabLatestCoordinate, 15);
-                                mGoogleMap.animateCamera(cabLocation);
-                                try{
-                                    if(inRide){
-                                        stoptimertask();
-                                        setStateInRide();
-                                    }
-                                    else if(!awaitingRide){
-                                        stoptimertask();
-                                        System.out.println("Check 10");
-                                        setStateBookRide();
-                                    }
-                                }catch(Exception e){
-                                    Log.e("Exception", e.getMessage());
+                    System.out.println(jObject.toString());
+                    String res = new HttpRequestTask(jObject).execute("http://www.hoi.co.in/dapi/updatelocation").get();
+                    if(res!= null) System.out.println(res);
+                    JSONObject data = new JSONObject(res);
+                    if( data.isNull("rider1id") || (data.getInt("rider1id") < 0)){
+                        setup = false;
+                    }else{
+                        setup = true;
+                        arrived = data.getBoolean("next_arrived");
+                        parseResponse(data);
+                        getAppState(data);
+                    }
+                }catch(Exception e){
+                    e.printStackTrace();
+                    checkUpdateRide = false;
+                }
+                //Code to execute in main thread
+                mHandler = new Handler(getApplicationContext().getMainLooper());
+                Runnable myRunnable = new Runnable() {
+                    @Override
+                    public void run() {
+                        if (setup) {
+                            if(nextDestinationChanged|| !nextPathSet){
+                                nextPathSet = false;
+                                setDestination();
+                                nextDestinationChanged = false;
+                            }
+                            if(nextPassengerChanged) {
+                                if(nextPassenger == null){
+                                    setUpHome("No Destination");
+                                    nextPassengerChanged = false;
+                                }else{
+                                    setUpHome(nextPassenger.getAddress());
+                                    nextPassengerChanged = false;
                                 }
                             }
+                            setup = false;
                         }
-                    };
-                    mHandler.post(myRunnable);
-                } catch (Exception e) {
-                    Log.d("Exception", e.getMessage());
-                }
-                Log.d("CODE", "Setting up rating pending");
+                        else{
+                            Log.d("Code", "Update Failed");
+                        }
+                        checkUpdateRide = false;
+
+                    }
+                };
+                mHandler.post(myRunnable);
             }
         }).start();
     }
 
+    private void getAppState(JSONObject data) throws JSONException{
+
+        if(passengers.size() > 0) {
+            if (nextDestination == null || nextDestination.latitude != data.getDouble("next_lat") ||
+                    nextDestination.longitude != data.getDouble("next_long")) {
+                nextDestination = new LatLng(data.getDouble("next_lat"), data.getDouble("next_long"));
+                nextDestinationChanged = true;
+            } else {
+                nextDestinationChanged = false;
+            }
+            String destinationAddress = data.getString("next_address1") + data.getString("next_address2");
+            if (nextPassenger == null || nextPassenger.getId() != data.getInt("nextriderid")) {
+                nextPassenger = setNextPassenger(data.getInt("nextriderid"), data.getString("nextriderphone"),
+                        nextDestination, destinationAddress);
+                nextPassengerChanged = true;
+            } else if (nextDestinationChanged) {
+                nextPassenger = setNextPassenger(data.getInt("nextriderid"), data.getString("nextriderphone"),
+                        nextDestination, destinationAddress);
+                nextPassengerChanged = true;
+            } else {
+                nextPassengerChanged = false;
+            }
+        } else{
+            if(nextPassenger != null) {
+                nextPassengerChanged = true;
+                nextDestinationChanged = true;
+            }else{
+                nextPassengerChanged = false;
+                nextDestinationChanged = false;
+            }
+            nextPassenger = null;
+            nextDestination = null;
+        }
+    }
+
+
     /*
-     * Booking ride related methods
+     * evaluation methods
      */
-    private float calculateDistance(Double slat, Double slong, Double dlat, Double dlong){
-        float distance =  0.0f;
-        distance = (float)(142.6 * Math.sqrt(Math.pow(Math.abs(slat-dlat),2)+Math.pow(Math.abs(slong-dlong),2)));
+    private float calculateDistance(Double slat, Double slong, Double dlat, Double dlong) {
+        float distance = 0.0f;
+        distance = (float) (142.6 * Math.sqrt(Math.pow(Math.abs(slat - dlat), 2) + Math.pow(Math.abs(slong - dlong), 2)));
         return distance;
     }
 
-    private float calculateTime(Double slat, Double slong, Double dlat, Double dlong){
-        float time =  0.0f;
-        time = (float)(225.73 * Math.sqrt(Math.pow(Math.abs(slat-dlat),2)+Math.pow(Math.abs(slong-dlong),2)));
+    private float calculateTime(Double slat, Double slong, Double dlat, Double dlong) {
+        float time = 0.0f;
+        time = (float) (225.73 * Math.sqrt(Math.pow(Math.abs(slat - dlat), 2) + Math.pow(Math.abs(slong - dlong), 2)));
         return time;
     }
 
-    private void applicationLogout(){
-        prefs.edit().remove("username").commit();
-        prefs.edit().remove("password").commit();
-        super.finish();
-    }
-
-    /*
-     * Wallet Fragment
-     */
-
-    private void setUpWallet(){
-        displayFragment = new FragmentWallet();
-        FragmentManager fm = getSupportFragmentManager();
-
-        Bundle args = new Bundle();
-        args.putString("authenticationheader", authenticationHeader);
-        args.putDouble("balance", balance);
-        displayFragment.setArguments(args);
-
-        fm.beginTransaction().replace(R.id.content_frame, displayFragment).commit();
-        setTitle("Wallet");
-
-        mProgress = ProgressDialog.show(this, "",
-                "Please Wait..", true);
-
-        new Thread(new Runnable() {
-            @Override
-            public void run()
-            {
-                try {
-                    //Code to execute in other thread
-                    setup = false;
-                    try {
-
-                        String credits = new HttpRequestTask().execute("http://www.hoi.co.in/api/credits").get();
-                        String debits = new HttpRequestTask().execute("http://www.hoi.co.in/api/debits").get();
-                        JSONArray jsonArray = new JSONArray(credits);
-                        creditList = new ArrayList<TransactionItem>();
-                        for(int i = 0; i < jsonArray.length() ; i++){
-                            TransactionItem tmp = new TransactionItem((JSONObject) jsonArray.get(i));
-                            creditList.add(tmp);
-                        }
-
-                        jsonArray = new JSONArray(debits);
-                        debitList = new ArrayList<TransactionItem>();
-                        for(int i = 0; i < jsonArray.length() ; i++){
-                            TransactionItem tmp = new TransactionItem((JSONObject) jsonArray.get(i));
-                            debitList.add(tmp);
-                        }
-                        setup = true;
-
-                    } catch(Exception e){
-                        Log.e("Exception", e.getMessage());
-                    }
-
-                    //Code to execute in main thread
-                    mHandler = new Handler(getApplicationContext().getMainLooper());
-                    Runnable myRunnable = new Runnable() {
-                        @Override
-                        public void run() {
-                            if (setup) {
-                                ((FragmentWallet) displayFragment).setCredits(creditList);
-                                ((FragmentWallet) displayFragment).setDebits(debitList);
-
-                            } else {
-                                createAlertDialog("Connection Problem", "Couldn't load credits and debits");
-                            }
-                        }
-                    };
-                    mHandler.postDelayed(myRunnable, 2000);
-                } catch (Exception e) {
-                    Log.d("Exception", e.getMessage());
-                }
-                Log.d("CODE", "Setting up rating pending");
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        //Code to execute in UI thread or main thread
-                        Handler handler = new Handler();
-                        handler.postDelayed(new Runnable() {
-                            public void run() {
-                                mProgress.dismiss();
-                            }
-                        }, 2000);
-                    }
-                });
-            }
-        }).start();
-
-    }
-    /*
-     * Contact Fragment
-     */
-
-    public void makecall(View view) {
-        String uri = "tel:" + "00919654965311".trim();
-        Intent intent = new Intent(Intent.ACTION_DIAL);
-        intent.setData(Uri.parse(uri));
-        startActivity(intent);
-    }
-
-    public void makeemail(View view) {
-        Intent i = new Intent(Intent.ACTION_SEND);
-        i.setType("message/rfc822");
-        i.putExtra(Intent.EXTRA_EMAIL, new String[]{"support@hoi.co.in"});
-        i.putExtra(Intent.EXTRA_SUBJECT, "reg: Hoi Cabs");
-
-        try {
-            startActivity(Intent.createChooser(i, "Send mail..."));
-        } catch (android.content.ActivityNotFoundException ex) {
-            Toast.makeText(this, "There are no email clients installed.", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void setUpContact() {
-        Fragment displayFragment = new FragmentContact();
-        FragmentManager fm = getSupportFragmentManager();
-
-        fm.beginTransaction().replace(R.id.content_frame, displayFragment).commit();
-        fm.executePendingTransactions();
-        setTitle("Contact Us");
+    private int estimatedTime(){
+        return (int) (System.currentTimeMillis() - upTime)/60000;
     }
 
     /*
      * Dialogs Methods
      */
-
-    private void createChangePassDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-
-        // Get the layout inflater
-        LayoutInflater inflater = this.getLayoutInflater();
-        View dView = inflater.inflate(R.layout.dialog_changepass, null);
-        // Add the buttons
-
-        final EditText oldPass = (EditText) dView.findViewById(R.id.old_pass);
-        final EditText newPass = (EditText) dView.findViewById(R.id.new_pass);
-        final EditText confPass = (EditText) dView.findViewById(R.id.confirm_pass);
-
-        builder.setView(dView)
-                // Add action buttons
-                .setPositiveButton(R.string.submit, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int id) {
-                    }
-                })
-                .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int id) {
-                        //nothing to be done when user cancels his action
-                    }
-                });
-        // Set other dialog properties
-        // Create the AlertDialog
-        AlertDialog dialog = builder.create();
-        dialog.show();
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                String res = "Password not changed";
-                if (oldPass.getText().toString().isEmpty()) {
-                    oldPass.setError("No Password Entered");
-                } else if (oldPass.getText().toString().equals(prefs.getString("password", ""))) {
-                    oldPass.setError("Password Mismatch with Old Password");
-                } else if (newPass.getText().toString().isEmpty()) {
-                    newPass.setError("No Password Entered");
-                } else if (!newPass.getText().toString().equals(confPass.getText().toString())) {
-                    confPass.setError("Password Mismatch");
-                } else {
-                    JSONObject data = new JSONObject();
-                    try {
-
-                        data.accumulate("password", newPass.getText().toString());
-                        res = new HttpRequestTask(data).execute(BASE_SERVER_URL + "updatepassword/" + userDetails.phone).get();
-
-                        Toast.makeText(MainActivity.this, res, Toast.LENGTH_LONG).show();
-                        Intent intent = new Intent(MainActivity.this, LoginActivity.class);
-                        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        getApplicationContext().startActivity(intent);
-                        MainActivity.this.finish();
-                    } catch (Exception e) {
-                        Log.e("EXCEPTION", e.getMessage());
-                    }
-                }
-            }
-        });
-    }
 
     public void createAlertDialog(String title, String message){
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
@@ -1654,17 +1143,16 @@ public class MainActivity extends ActionBarActivity implements android.location.
 
     }
 
-    public void createNotification(String title, String message){
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(MainActivity.this);
-        builder.setSmallIcon(R.drawable.ic_logo);
-        builder.setContentTitle(title);
-        builder.setContentText(message);
-        NotificationManager notificationManager = (NotificationManager) getSystemService(
-                NOTIFICATION_SERVICE);
-        notificationManager.notify(NOTIFICATION_ID, builder.build());
+    public void startStopRideProcess(View view) {
+        try{
+            createRatingDialog(nextPassenger.getId());
+        }catch(Exception e){
+            e.printStackTrace();
+            Toast.makeText(getApplicationContext(), "Stop Ride failed", Toast.LENGTH_LONG).show();
+        }
     }
 
-    public void createRatingDialog(final int passenger) throws ExecutionException, InterruptedException {
+    public void createRatingDialog(final int passengerid) throws ExecutionException, InterruptedException {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
 
         // Get the layout inflater
@@ -1678,13 +1166,15 @@ public class MainActivity extends ActionBarActivity implements android.location.
                 .setPositiveButton(R.string.submit, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int id) {
-                        new HttpRequestTask().execute(BASE_SERVER_URL + "rateuser/" + rideRequestId + "/" + coPassengers.get(passenger).id
-                                + "/" + rating.getRating());
+                        dialog.dismiss();
+                        requestStopRide(passengerid);
+                        new HttpRequestTask().execute("http://www.hoi.co.in/dapi/rateuserbydriver/" + passengerid + "/" + rating.getRating());
                     }
                 })
                 .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int id) {
                         //nothing to be done when user cancels his action
+                        dialog.dismiss();
                     }
                 });
         // Set other dialog properties
@@ -1692,156 +1182,115 @@ public class MainActivity extends ActionBarActivity implements android.location.
         AlertDialog dialog = builder.create();
         de.hdodenhof.circleimageview.CircleImageView pic = (de.hdodenhof.circleimageview.CircleImageView)
                 dView.findViewById(R.id.co_passenger_dp);
-        pic.setImageBitmap(coPassengers.get(passenger).pic);
-        dialog.show();
-    }
-
-    public void createRiderReportDialog() {
-
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-
-        // Get the layout inflater
-        LayoutInflater inflater = this.getLayoutInflater();
-        View dView = inflater.inflate(R.layout.dialog_report_rider, null);
-        final EditText userComment = (EditText) dView.findViewById(R.id.comment);
-
-        // Add the buttons
-
-        builder.setView(dView)
-                // Add action buttons
-                .setPositiveButton(R.string.submit, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int id) {
-                        new HttpRequestTask(userComment.getText().toString()).execute("http://www.hoi.co.in/api/" + "/addnlrider/" + rideRequestId);
-                        dialog.dismiss();
-                    }
-                })
-                .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int id) {
-                        dialog.dismiss();
-                    }
-                });
-        // Set other dialog properties
-        // Create the AlertDialog
-        AlertDialog dialog = builder.create();
-        dialog.show();
-    }
-
-    public void createVoucherDialog(){
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-
-        // Get the layout inflater
-        LayoutInflater inflater = this.getLayoutInflater();
-        View dView = inflater.inflate(R.layout.voucher_dialog, null);
-
-        final EditText voucherCode = (EditText)dView.findViewById(R.id.voucher);
-
-        // Add the buttons
-        builder.setView(dView)
-                // Add action buttons
-                .setPositiveButton(R.string.submit, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int id) {}
-                })
-                .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int id) {
-                        //nothing to be done when user cancels his action
-                    }
-                });
-        // Set other dialog properties
-        // Create the AlertDialog
-        final AlertDialog dialog = builder.create();
-        dialog.show();
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (voucherCode.getText().toString().isEmpty()) {
-                    voucherCode.setError("No Code entered");
-                } else {
-                    dialog.dismiss();
-                    mProgress = ProgressDialog.show(MainActivity.this, "",
-                            "Please Wait..", true);
-                    new Thread(new Runnable() {
-                        @Override
-                        public void run() {
-                            setup = false;
-                            tmpResponse = "";
-                            try {
-                                //Code to execute in other thread
-                                String res = new HttpRequestTask().execute(BASE_SERVER_URL + "applyvoucher/" + voucherCode.getText()).get();
-                                JSONObject jsonObject = new JSONObject(res);
-                                if (jsonObject.getBoolean("accepted")) {
-                                    setup = true;
-                                    tmpResponse = jsonObject.getString("message");
-                                    balance = jsonObject.getDouble("availableinr");
-                                } else {
-                                    tmpResponse = jsonObject.getString("message");
-                                }
-                            } catch (Exception e) {
-                                Log.e("Exception", e.getMessage());
-                            }
-
-                            //Code to execute in main thread
-                            mHandler = new Handler(getApplicationContext().getMainLooper());
-                            Runnable myRunnable = new Runnable() {
-                                @Override
-                                public void run() {
-                                    if (setup) {
-                                        Toast.makeText(getApplicationContext(), tmpResponse, Toast.LENGTH_LONG).show();
-                                        ((FragmentWallet) displayFragment).setBalance(balance);
-                                    } else if (tmpResponse != "") {
-                                        createAlertDialog("Sorry", tmpResponse);
-                                    } else {
-                                        createAlertDialog("Connection Problem", "Couldn't connect to server");
-                                    }
-                                }
-                            };
-                            mHandler.postDelayed(myRunnable, 1000);
-                            Log.d("CODE", "Setting up rating pending");
-                            runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                    //Code to execute in UI thread or main thread
-                                    Handler handler = new Handler();
-                                    handler.postDelayed(new Runnable() {
-                                        public void run() {
-                                            mProgress.dismiss();
-                                        }
-                                    }, 1000);
-                                }
-                            });
-                        }
-                    }).start();
-                }
+        if(passengerid == nextPassenger.getId())
+            pic.setImageBitmap(nextPassenger.getImage());
+        else{
+            for (int i = 0 ; i < passengers.size(); i++){
+                if(passengerid == passengers.get(i).getId())
+                    pic.setImageBitmap(passengers.get(i).getPassengerpic()); 
             }
-        });
-
+        }
+        dialog.show();
     }
 
-    public void showCabRates(View view){
-
+    public void createMoneyMadeDialog(){
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
+
         // Get the layout inflater
         LayoutInflater inflater = this.getLayoutInflater();
-        View dView = inflater.inflate(R.layout.dialog_cab_rates, null);
-        builder.setView(dView)// Add action buttons
+        View dView = inflater.inflate(R.layout.dialog_money_made, null);
+        // Add the buttons
+        TextView distTV = (TextView) dView.findViewById(R.id.distance);
+        TextView durTV = (TextView) dView.findViewById(R.id.duration);
+        TextView moneyTV = (TextView) dView.findViewById(R.id.income);
+
+        distTV.setText("\u20B9 "+distanceFare);
+        durTV.setText("\u20B9 "+timeFare);
+        moneyTV.setText("\u20B9 "+totalFare);
+        builder.setView(dView)
+                // Add action buttons
                 .setPositiveButton(R.string.close, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int id) {
                         dialog.dismiss();
                     }
-                })
-                .setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int id) {
-                        //nothing to be done when user cancels his action
-                    }
                 });
-        // Set other dialog properties
-        // Create the AlertDialog
-        final AlertDialog dialog = builder.create();
+
+        AlertDialog dialog = builder.create();
         dialog.show();
+
         dialog.getButton(Dialog.BUTTON_NEGATIVE).setVisibility(View.INVISIBLE);
     }
+
+    /*
+     * Miscellaneous Methods
+     */
+
+    private boolean isConnceted() {
+        ConnectivityManager cm =
+                (ConnectivityManager) getApplicationContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo activeNetwork = cm.getActiveNetworkInfo();
+        return (activeNetwork != null && activeNetwork.isConnectedOrConnecting());
+    }
+
+
+    /*
+     * Received data parser and modifying function
+     */
+    public void passengerList(View view) {
+        Dialog dialog = new Dialog(MainActivity.this);
+        dialog.setContentView(R.layout.list_passenger);
+
+        ListView passengerList = (ListView) dialog.findViewById(R.id.lv);
+        PassengerListAdapter passengerListAdapter = new PassengerListAdapter(MainActivity.this, passengers, getResources());
+        passengerList.setAdapter(passengerListAdapter);
+        dialog.setCancelable(true);
+        dialog.setTitle("Passengers");
+        dialog.show();
+    }
+
+    public void parseResponse(JSONObject userData){
+        passengers = new ArrayList<Passenger>();
+        try {
+            if (!userData.isNull("rider1id")&& userData.getInt("rider1id") != 0) {
+                passengers.add(new Passenger(userData.getString("rider1pic"), userData.getInt("rider1id"), userData.getBoolean("rider1upcoming")));
+            }
+
+            if (!userData.isNull("rider2id")&& userData.getInt("rider2id") != 0) {
+                passengers.add(new Passenger(userData.getString("rider2pic"), userData.getInt("rider2id"), userData.getBoolean("rider2upcoming")));
+            }
+
+            if (!userData.isNull("rider3id")&& userData.getInt("rider3id") != 0){
+                passengers.add(new Passenger(userData.getString("rider3pic"), userData.getInt("rider3id"), userData.getBoolean("rider3upcoming")));
+            }
+            if (!userData.isNull("rider4id")&& userData.getInt("rider4id") != 0) {
+                passengers.add(new Passenger(userData.getString("rider4pic"), userData.getInt("rider4id"), userData.getBoolean("rider4upcoming")));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        Log.d("Passenger Size", "" + passengers.size());
+    }
+
+    public NextPassenger setNextPassenger(int id, String phone, LatLng location, String address){
+        int i = 0;
+        if(passengers.size() <= 0) {
+            Log.d("No passengers", passengers.size() + "");
+            return null;
+
+        }
+        for(; i < passengers.size(); i++){
+            if(id == passengers.get(i).getId())
+                break;
+        }
+
+        return new NextPassenger(id,phone,passengers.get(i).getPassengerpic(),
+                location, address,passengers.get(i).isWaiting);
+    }
+
+    /*
+     * Draw Path related functions
+     */
 
     public void findDirections(double fromPositionDoubleLat, double fromPositionDoubleLong, double toPositionDoubleLat, double toPositionDoubleLong, String mode)
     {
@@ -1869,307 +1318,48 @@ public class MainActivity extends ActionBarActivity implements android.location.
     }
 
     /*
-     * Getter functions
+     * getter methods
      */
+    public NextPassenger getNextPassenger(){return nextPassenger;}
 
-    public String getCarNumber(){
-        return carDetails.regNumber;
+    public boolean getArrivedState(){
+        return arrived;
     }
 
-    public String getCarModel(){
-        return carDetails.model;
-    }
-
-    public String getDriverPhone(){
-        return driverDetails.phone;
-    }
-
-    public String getDriverName(){
-        return driverDetails.name;
-    }
-
-    public Bitmap getDriverPic(){
-        return driverDetails.driverPic;
-    }
-    /*
-     * Miscellaneous Methods
-     */
-
-    public String getAuthHeader(){
-        return authenticationHeader;
-    }
-
-    public Bitmap getPassengerBitmap(int i) {
-        return coPassengers.get(i).pic;
-    }
-
-    public void addBalance(double v) {
-        balance = balance + v;
+    private JSONObject getPostRequestData() throws JSONException, IOException {
+        JSONObject data = new JSONObject();
+        data.accumulate("ridelastlong", Math.round(currentLocationCoordinate.longitude*10000.0)/10000.0);
+        data.accumulate("ridelastlat", Math.round(currentLocationCoordinate.latitude * 10000.0)/10000.0);
+        data.accumulate("estimateddistance", Math.round(distanceTravelled*100.0)/100.0);
+        data.accumulate("estimatedtime", estimatedTime());
+        data.accumulate("estimatedfare", Math.round(estimatedFare*100.0)/100.0);
+        Geocoder gcd = new Geocoder(MainActivity.this, Locale.getDefault());
+        List<Address> addresses = gcd.getFromLocation(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude, 1);
+        if (addresses.size() > 0)
+            data.accumulate("state", addresses.get(0).getAdminArea());
+        else
+            data.accumulate("state", "");
+        return data;
     }
 
     /*
-     * Represents an asynchronous cab booking task used to authenticate
-     * the ride.
+     * Asynchronous task
      */
 
-    private class CabBookingTask extends AsyncTask<String, Void, String> {
-
-        private HttpResponse response;
-        private JSONObject cabBookingData;
-
-        @Override
-        protected String doInBackground(String... url) {
-            // TODO: attempt authentication against a network service.
-            SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
-            String currentDateandTime = sdf.format(new Date());
-            Encryptor encryptor = new Encryptor();
-            String encrptedkey = "";
-
-            try {
-                encrptedkey = encryptor.getEncryptedKeyValue(currentDateandTime);
-            } catch (Exception e1) {
-                e1.printStackTrace();
-            }
-
-            try {
-
-                HttpPost request = new HttpPost(url[0]);
-                request.addHeader("Authorization", "Basic " + authenticationHeader);
-                request.addHeader("androidkey",encrptedkey);
-                request.addHeader("Content-Type", "application/json");
-
-                System.out.println(authenticationHeader + " " + encrptedkey);
-                String json = "";
-
-                // 3. build jsonObject
-                cabBookingData = new JSONObject();
-                cabBookingData.accumulate("origin_latitude", cabBookingDetails.origin_latitude);
-                cabBookingData.accumulate("origin_longitude", cabBookingDetails.origin_longitude);
-                cabBookingData.accumulate("origin_address1", cabBookingDetails.origin_address1);
-                cabBookingData.accumulate("origin_address2", cabBookingDetails.origin_address2);
-                cabBookingData.accumulate("destination_latitude", cabBookingDetails.destination_latitude);
-                cabBookingData.accumulate("destination_longitude", cabBookingDetails.destination_longitude);
-                cabBookingData.accumulate("destination_address1", cabBookingDetails.destination_address1);
-                cabBookingData.accumulate("destination_address2", cabBookingDetails.destination_address2);
-                cabBookingData.accumulate("requestdatetime", currentDateandTime);
-
-                // 4. convert JSONObject to JSON to String
-                json = cabBookingData.toString();
-
-                // 5. set json to StringEntity
-
-                request.setEntity(new StringEntity(json));
-                HttpClient httpclient = new DefaultHttpClient();
-                try {
-                    response = httpclient.execute(request);
-                } catch (ClientProtocolException e) {
-                    e.printStackTrace();
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
-
-            InputStream inputStream = null;
-            String result = null;
-            try {
-                HttpEntity entity = response.getEntity();
-                inputStream = entity.getContent();
-
-                // json is UTF-8 by default
-                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"), 8);
-                StringBuilder sb = new StringBuilder();
-
-                String line = null;
-                while ((line = reader.readLine()) != null)
-                {
-                    sb.append(line + "\n");
-                }
-                result = sb.toString();
-            } catch (Exception e) {
-                // Oops
-            }
-            finally {
-                try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
-            }
-            return result;
-        }
-
-        @Override
-        protected void onPostExecute(final String data) {
-        }
-
-        @Override
-        protected void onCancelled() {
-        }
-
-        public JSONObject getCabBookingData(){return cabBookingData;}
-    }
-
-    private class UpdateRideTask extends AsyncTask<String, Void, String> {
-
-        private HttpResponse response;
-
-        @Override
-        protected String doInBackground(String... url) {
-            // TODO: attempt authentication against a network service.
-            SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
-            String currentDateandTime = sdf.format(new Date());
-            Encryptor encryptor = new Encryptor();
-            String encrptedkey = "";
-
-            try {
-                encrptedkey = encryptor.getEncryptedKeyValue(currentDateandTime);
-            } catch (InvalidKeyException e1) {
-                e1.printStackTrace();
-            } catch (IllegalBlockSizeException e1) {
-                e1.printStackTrace();
-            } catch (BadPaddingException e1) {
-                e1.printStackTrace();
-            } catch (UnsupportedEncodingException e1) {
-                e1.printStackTrace();
-            } catch (DecoderException e1) {
-                e1.printStackTrace();
-            }
-
-            try {
-                HttpPost request = new HttpPost(url[0]);
-                request.addHeader("Authorization", "Basic " + authenticationHeader);
-                request.addHeader("androidkey",encrptedkey);
-                request.addHeader("Content-Type", "application/json");
-
-                String json = "";
-
-                // 3. build jsonObject
-                JSONObject jsonObject = new JSONObject();
-                jsonObject.accumulate("ridelastlat", currentLocationCoordinate.latitude);
-                jsonObject.accumulate("ridelastlong", currentLocationCoordinate.longitude);
-                jsonObject.accumulate("requestdatetime", currentDateandTime);
-                jsonObject.accumulate("estimateddistance", currentRideDetails.distanceIncurred);
-                jsonObject.accumulate("estimatedtime", currentRideDetails.timeIncurred);
-                jsonObject.accumulate("estimatedfare", currentRideDetails.costIncurred);
-
-                if((++stateCounter)%5 == 0){
-                    Geocoder gcd = new Geocoder(MainActivity.this, Locale.getDefault());
-                    List<Address> addresses = gcd.getFromLocation(currentLocationCoordinate.latitude, currentLocationCoordinate.longitude, 1);
-                    if (addresses.size() > 0 && addresses.get(0).getAdminArea() != null)
-                        jsonObject.accumulate("state", addresses.get(0).getAdminArea());
-                    else
-                        jsonObject.accumulate("state", "");
-                }
-                else jsonObject.accumulate("state", "");
-
-                // 4. convert JSONObject to JSON to String
-                json = jsonObject.toString();
-
-                // 5. set json to StringEntity
-
-                request.setEntity(new StringEntity(json));
-                HttpClient httpclient = new DefaultHttpClient();
-                try {
-                    response = httpclient.execute(request);
-
-                } catch (ClientProtocolException e) {
-                    e.printStackTrace();
-                }
-
-            } catch (IOException e) {
-                e.printStackTrace();
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
-
-            InputStream inputStream = null;
-            String result = null;
-            try {
-                HttpEntity entity = response.getEntity();
-                inputStream = entity.getContent();
-
-                // json is UTF-8 by default
-                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"), 8);
-                StringBuilder sb = new StringBuilder();
-                String line = null;
-                while ((line = reader.readLine()) != null)
-                {
-                    sb.append(line + "\n");
-                }
-                result = sb.toString();
-            } catch (Exception e) {
-                // Oops
-            }
-            finally {
-                try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
-            }
-            return result;
-        }
-
-        @Override
-        protected void onPostExecute(final String data) {
-            System.out.println(data);
-            JSONObject jObject;
-
-            if (data != null) {
-
-                //Todo if the ride has been closed
-                try{
-                    jObject = new JSONObject(data);
-                    int currentRefund = jObject.getInt("refund");
-                    if(currentRefund > refund){
-                        balance += currentRefund - refund;
-                        createAlertDialog("Refund!", "\u20B9 " + (currentRefund - refund) + " have been added to your account.");
-                        refund = currentRefund;
-                    }
-                    if (jObject.getBoolean("rideratingawaited")) {
-                        //Todo show the bill summary
-                        setStateRatingPending();
-                    }
-                    else {
-                        cabLatestCoordinate = new LatLng(jObject.getDouble("ridelastlat"), jObject.getDouble("ridelastlong"));
-                        billingRate = (float) jObject.getDouble("billingrate");
-                        nextCabDestination = new LatLng(jObject.getDouble("nextdestlat"), jObject.getDouble("nextdestlong"));
-
-                    }
-                }catch(Exception e){
-                    Log.d("Exception", e.toString());
-                }
-
-            } else {
-                //Todo if no data come from server
-
-            }
-        }
-
-        @Override
-        protected void onCancelled() {
-
-        }
-    }
-
-    private class HttpRequestTask extends AsyncTask<String, Void, String> {
+    public class HttpRequestTask extends AsyncTask<String, Void, String> {
 
         private HttpResponse response;
         JSONObject data;
         boolean check;
-        boolean report;
-        private String comment = "";
 
         HttpRequestTask(JSONObject data){
             this.data = data;
             check = true;
-            report = false;
         }
 
         HttpRequestTask(){
             this.data = new JSONObject();
             check = false;
-            report = false;
-        }
-
-        HttpRequestTask(String msg){
-            comment = msg;
-            check = false;
-            report = true;
         }
 
         @Override
@@ -2201,16 +1391,12 @@ public class MainActivity extends ActionBarActivity implements android.location.
                 request.addHeader("androidkey", encrptedkey);
 
                 if(check){
-                    data.accumulate("counter", currentDateandTime);
+                    data.accumulate("requestdatetime", currentDateandTime);
+                    System.out.println(data.toString());
                     request.addHeader("Content-Type", "application/json");
                     request.setEntity(new StringEntity(data.toString()));
                 }
-                else if(report){
-                    List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>(2);
-                    nameValuePairs.add(new BasicNameValuePair("counter", currentDateandTime));
-                    nameValuePairs.add(new BasicNameValuePair("comment", comment));
-                    request.setEntity(new UrlEncodedFormEntity(nameValuePairs));
-                }else{
+                else{
                     List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>(1);
                     nameValuePairs.add(new BasicNameValuePair("counter", currentDateandTime));
                     request.setEntity(new UrlEncodedFormEntity(nameValuePairs));
@@ -2250,13 +1436,11 @@ public class MainActivity extends ActionBarActivity implements android.location.
             finally {
                 try{if(inputStream != null)inputStream.close();}catch(Exception squish){}
             }
-            System.out.println(result);
             return result;
         }
 
         @Override
-        protected void onPostExecute(final String data) {
-        }
+        protected void onPostExecute(String data) {}
 
         @Override
         protected void onCancelled() {
@@ -2321,55 +1505,10 @@ public class MainActivity extends ActionBarActivity implements android.location.
     }
 
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu items for use in the action bar
-        MenuInflater inflater = getMenuInflater();
-        inflater.inflate(R.menu.main, menu);
-        return super.onCreateOptionsMenu(menu);
-    }
 
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle presses on the action bar items
-        if (mDrawerToggle.onOptionsItemSelected(item)) {
-            return true;
-        }
-
-        switch (item.getItemId()) {
-            case R.id.action_search:
-                return true;
-            case R.id.action_settings:
-                applicationLogout();
-                return true;
-            default:
-                return super.onOptionsItemSelected(item);
-        }
-    }
-
-    public String[] getAddress(double latitude, double longitude){
-        Geocoder geocoder = new Geocoder(this, Locale.getDefault());
-
-        String[] address = new String[2];
-        address[0] = address[1] = "";
-        List<Address> addresses = null;
-        try {
-            addresses = geocoder.getFromLocation(latitude,longitude,1); // Here 1 represent max location result to returned, by documents it recommended 1 to 5
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        if(addresses != null){
-
-            if(addresses.get(0).getAddressLine(0) != null) address[0] = addresses.get(0).getAddressLine(0);
-            if(addresses.get(0).getLocality() != null) address[1] = addresses.get(0).getLocality();
-            if(addresses.get(0).getAdminArea() != null) address[1] = address[1] +", "+ addresses.get(0).getAdminArea();
-            if(addresses.get(0).getPostalCode() != null) address[1] = address[1] +", "+ addresses.get(0).getPostalCode();
-            return address;
-        }
-
-        return new String[]{"Address could not be found","Address could not be found"};
-    }
+    /*
+     * Imported methods ... unused
+     */
 
     @Override
     public void onStatusChanged(String provider, int status, Bundle extras) {
@@ -2387,71 +1526,38 @@ public class MainActivity extends ActionBarActivity implements android.location.
     }
 
     @Override
-    public Loader<Cursor> onCreateLoader(int arg0, Bundle query) {
-        CursorLoader cLoader = null;
-        if(arg0==0)
-            cLoader = new CursorLoader(getBaseContext(), PlaceProvider.SEARCH_URI, null, null, new String[]{ query.getString("query") }, null);
-        else if(arg0==1)
-            cLoader = new CursorLoader(getBaseContext(), PlaceProvider.DETAILS_URI, null, null, new String[]{ query.getString("query") }, null);
-        return cLoader;
-
-    }
-
-    @Override
-    public void onLoadFinished(Loader<Cursor> arg0, Cursor c) {}
-
-    @Override
-    public void onLoaderReset(Loader<Cursor> arg0) {
-        // TODO Auto-generated method stub
-    }
-
-    @Override
-    public void onMarkerDragStart(Marker marker) {
-
-    }
-
-    @Override
-    public void onMarkerDrag(Marker marker) {
-
-    }
-
-    @Override
-    public void onMarkerDragEnd(Marker marker) {
-        // TODO Auto-generated method stub
-        FragmentMain disp = (FragmentMain) displayFragment;
-        LatLng dragPosition = marker.getPosition();
-        double dragLat = dragPosition.latitude;
-        double dragLong = dragPosition.longitude;
-        if(sourceMarker.getPosition().latitude == dragLat && sourceMarker.getPosition().longitude == dragLong){
-            sAddress = getAddress(sourceMarker.getPosition().latitude, sourceMarker.getPosition().longitude);
-            disp.setTextSource(sAddress[0] + ", " + sAddress[1]);
-        }else if(destinationMarker.getPosition().latitude == dragLat && destinationMarker.getPosition().longitude == dragLong){
-            dAddress = getAddress(destinationMarker.getPosition().latitude, destinationMarker.getPosition().longitude);
-            disp.setTextDestination(dAddress[0] + ", " + dAddress[1]);
-        }
-    }
-
-    @Override
     public void onMapClick(LatLng latLng) {
 
         // TODO Auto-generated method stub
         mGoogleMap.animateCamera(CameraUpdateFactory.newLatLng(latLng));
     }
 
-    public void zoomToSource(){
-        if(sourceMarker != null) {
-            CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(sourceMarker.getPosition(), 15);
-            mGoogleMap.animateCamera(yourLocation);
-        }
+    @Override
+    public void onPause() {
+        super.onPause();  // Always call the superclass method first
     }
 
-    public void zoomToDestination(){
-        if(destinationMarker != null) {
-            CameraUpdate yourLocation = CameraUpdateFactory.newLatLngZoom(destinationMarker.getPosition(), 15);
-            mGoogleMap.animateCamera(yourLocation);
-        }
+    @Override
+    protected void onStop() {
+        super.onStop();
     }
 
+    @Override
+    public void onBackPressed() {
+        moveTaskToBack(true);
+    }
+
+    @Override
+    protected void onPostCreate(Bundle savedInstanceState) {
+        super.onPostCreate(savedInstanceState);
+        // Sync the toggle state after onRestoreInstanceState has occurred.
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        // Pass any configuration change to the drawer toggles
+    }
 }
 
 

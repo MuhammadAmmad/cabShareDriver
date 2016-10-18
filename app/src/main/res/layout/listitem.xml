@@ -3,16 +3,38 @@
     android:orientation="vertical" android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <TextView
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textAppearance="?android:attr/textAppearanceLarge"
-        android:id="@+id/address_primary" />
+        android:orientation="vertical">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@color/white"
+            android:id="@+id/pic_layout"
+            android:orientation="horizontal">
+            <ImageView
+                android:layout_width="70dp"
+                android:layout_height="70dp"
+                android:src="@drawable/user1"
+                android:layout_marginTop="5dp"
+                android:layout_margin="5dp"
+                android:layout_weight="0.5"
+                android:id="@+id/passenger_pic"
+                />
 
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textAppearance="?android:attr/textAppearanceSmall"
-        android:id="@+id/address_secondary" />
+            <Button
+                style="?android:attr/buttonStyleSmall"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Stop Ride"
+                android:id="@+id/stop_ride"
+                android:gravity="center"
+                android:layout_gravity="center_vertical|right"
+                android:layout_weight="0.5" />
+        </LinearLayout>
+    </LinearLayout>
+
 
 </LinearLayout>
